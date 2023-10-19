@@ -1,22 +1,23 @@
 plugins {
+    id "com.github.node-gradle.node" version "3.3.0"
+    id "run.halo.plugin.devtools" version "0.0.5"
+    id "io.freefair.lombok" version "8.0.0-rc2"
     id 'java'
-    id "com.github.node-gradle.node" version "5.0.0"
-    id "io.freefair.lombok" version "8.0.1"
-    id "run.halo.plugin.devtools" version "0.0.7"
 }
 
-group 'run.halo.starter'
+group 'run.halo.lucence'
 sourceCompatibility = JavaVersion.VERSION_17
 
 repositories {
-    mavenCentral()
     maven { url 'https://s01.oss.sonatype.org/content/repositories/releases' }
     maven { url 'https://s01.oss.sonatype.org/content/repositories/snapshots/' }
     maven { url 'https://repo.spring.io/milestone' }
+    mavenCentral()
 }
 
 dependencies {
-    implementation platform('run.halo.tools.platform:plugin:2.6.0-SNAPSHOT')
+    implementation platform('run.halo.tools.platform:plugin:2.10.0-SNAPSHOT')
+
     compileOnly 'run.halo.app:api'
 
     testImplementation 'run.halo.app:api'
@@ -31,11 +32,25 @@ node {
     nodeProjectDir = file("${project.projectDir}/console")
 }
 
-task buildFrontend(type: PnpmTask) {
+tasks.register('pnpmInstall', NpxTask) {
+    command = "pnpm@7"
+    args = ["install"]
+}
+
+configurations.runtimeClasspath {
+    exclude group: 'com.fasterxml.jackson.core'
+}
+
+tasks.register('buildFrontend', NpxTask) {
+    command = 'pnpm@7'
     args = ['build']
+    dependsOn(pnpmInstall)
 }
 
 build {
-    // build frontend before build
     tasks.getByName('compileJava').dependsOn('buildFrontend')
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
 }

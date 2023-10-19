@@ -1,29 +1,21 @@
-import { definePlugin } from "@halo-dev/console-shared";
-import HomeView from "./views/HomeView.vue";
-import { IconPlug } from "@halo-dev/components";
-import { markRaw } from "vue";
+import {definePlugin, type EditorProvider} from "@halo-dev/console-shared";
+import {markRaw} from "vue";
+import LucenceEngine from "./components/LucenceEngine.vue";
+import logo from './assets/logo.svg'
 
 export default definePlugin({
-  components: {},
-  routes: [
-    {
-      parentName: "Root",
-      route: {
-        path: "/example",
-        name: "Example",
-        component: HomeView,
-        meta: {
-          title: "示例页面",
-          searchable: true,
-          menu: {
-            name: "示例页面",
-            group: "示例分组",
-            icon: markRaw(IconPlug),
-            priority: 0,
-          },
+    extensionPoints: {
+        "editor:create": (): EditorProvider[] => {
+            return [
+                {
+                    name: "lucence-editor",
+                    displayName: "Lucence for Halo",
+                    // @ts-ignore
+                    component: markRaw(LucenceEngine),
+                    rawType: "markdown",
+                    logo: logo,
+                },
+            ];
         },
-      },
     },
-  ],
-  extensionPoints: {},
 });
