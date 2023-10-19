@@ -1,4 +1,7 @@
 # Lucence For Halo
+
+![banner](https://github.com/DioxideCN/plugin-lucence-for-halo/blob/main/images/banner-english.png?raw=true)
+
 ## Abstract
 
 The "Lucence For Halo" plugin integrates the Lucence Markdown Editor into Halo versions 2.8.0 and above. This is a robust Markdown syntax editor that supports all Markdown conventions, offers multi-theme switching, memory-based settings, docking features, and more.
