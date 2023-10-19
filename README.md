@@ -1,45 +1,19 @@
-# plugin-starter
+# Lucence For Halo
+## Abstract
 
-Halo 2.0 插件开发快速开始模板。
+The "Lucence For Halo" plugin integrates the Lucence Markdown Editor into Halo versions 2.8.0 and above. This is a robust Markdown syntax editor that supports all Markdown conventions, offers multi-theme switching, memory-based settings, docking features, and more.
 
-## 开发环境
+## Building the Project
 
-插件开发的详细文档请查阅：<https://docs.halo.run/developer-guide/plugin/hello-world>
+If you wish to further develop and extend the "Lucence for Halo" plugin, you should first fork the repository. After a successful fork, open the project using IntelliJ IDEA. To build the frontend dependencies, navigate to the `console` directory and execute the following commands:
 
-```bash
-git clone git@github.com:halo-sigs/plugin-starter.git
-
-# 或者当你 fork 之后
-
-git clone git@github.com:{your_github_id}/plugin-starter.git
+```shell
+cd ./console/
+pnpm i
 ```
 
-```bash
-cd path/to/plugin-starter
-```
+Once the build is complete, execute the project's 'build' Gradle Task to construct the plugin project.
 
-```bash
-# macOS / Linux
-./gradlew pnpmInstall
+## Contributing
 
-# Windows
-./gradlew.bat pnpmInstall
-```
-
-```bash
-# macOS / Linux
-./gradlew build
-
-# Windows
-./gradlew.bat build
-```
-
-修改 Halo 配置文件：
-
-```yaml
-halo:
-  plugin:
-    runtime-mode: development
-    fixedPluginPath:
-      - "/path/to/plugin-starter"
-```
+If you have innovative ideas or discover any issues, we encourage you to contribute by forking the repository and submitting a Pull Request. Once your code passes the tests, it will be merged into the main branch, becoming a permanent part of "Lucence for Halo".
