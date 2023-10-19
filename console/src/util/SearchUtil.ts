@@ -185,6 +185,18 @@ export const SearchUtil = {
                          startIdx: number, 
                          endRow: number, 
                          endIdx: number): Range | null => {
+        const range: Range | null = SearchUtil.onlyGetHighlightRange(startRow, startIdx, endRow, endIdx);
+        const selection: Selection | null = window.getSelection();
+        if (selection && range) {
+            selection.removeAllRanges();
+            selection.addRange(range);
+        }
+        return range;
+    },
+    onlyGetHighlightRange: (startRow: number,
+                            startIdx: number,
+                            endRow: number,
+                            endIdx: number): Range | null => {
         const editorArea: Element = document.getElementsByClassName('ProseMirror')[0]!;
         const divs: Element[] = Array.from(editorArea.children);
         const startRange: Range | null = createRangeFromOffsets(divs[startRow - 1], startIdx, startIdx);
@@ -193,13 +205,8 @@ export const SearchUtil = {
         const range: Range = document.createRange();
         range.setStart(startRange.commonAncestorContainer, startRange.startOffset);
         range.setEnd(endRange.commonAncestorContainer, endRange.endOffset);
-        const selection: Selection | null = window.getSelection();
-        if (selection) {
-            selection.removeAllRanges();
-            selection.addRange(range);
-        }
-        return selection ? selection.getRangeAt(0) : null;
-    },
+        return range;
+    }
 }
 
 function createRangeFromOffsets(div: Element, 

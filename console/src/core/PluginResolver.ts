@@ -1,4 +1,4 @@
-import type {PluginCommand, PluginDetail, PluginHolder, PluginList, PluginToolbar} from "@/extension/ArgumentPlugin";
+import type {PluginCommand, PluginHolder, PluginList, PluginToolbar} from "@/extension/ArgumentPlugin";
 import type { AbstractPlugin } from "@/extension/BasePlugin";
 import {Stack} from "@/core/BasicStructure";
 import type {ToolbarItemOptions} from "@toast-ui/editor/types/ui";
@@ -50,7 +50,7 @@ export class PluginResolver {
         // 是否已经存在相同name和display的插件，如果是则不load这个插件并throw异常中断程序
         for (let elem of this._pluginList.elems()) {
             if (elem.key === plugin.detail.name) {
-                throw Error(`Plugin ${plugin.detail.name} has been registered, you should change your plugin id.`);
+                throw Error(`Plugin id "${plugin.detail.name}" has been registered before, you should change your plugin id.`);
             }
         }
         // 插件的事件注册在BasicStructure#PluginEventHolder.register方法中进行实现

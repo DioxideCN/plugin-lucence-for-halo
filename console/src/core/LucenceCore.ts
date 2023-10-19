@@ -458,6 +458,50 @@ export class LucenceCore {
         },
     }
 
+    private isReplacing: boolean = false;
+
+    /**
+     * 对文本内容进行逐个替换和全局替换。值得第三方开发者注意的是{@link SearchUtil#highlightSelection}方法和{@link SearchUtil#onlyGetHighlightRange}方法的差异，前者会更新Selection选区的同时返回Range对象，后者只会返回Range对象。
+     * <p>
+     * 这两个方法在调用时需要明确一点，前端对Selection的渲染是被调度到最后执行的，所以循环体系中调用{@link SearchUtil#highlightSelection}不会发生选区的持续变更，这会导致非常严重的错误，所以在全局替换中应该使用更抽象的{@link SearchUtil#onlyGetHighlightRange}方法来获取Range。
+     * @param isGlobal 是否为全局替换
+     */
+    public doReplacing(isGlobal: boolean) {
+        if (!LucenceCore._cache.value.feature.search.replace ||
+            LucenceCore._cache.value.feature.search.result.total === 0) {
+            return;
+        }
+        const value: string =
+            (document.getElementById("amber-search--replacing") as HTMLInputElement).value!;
+        if (isGlobal) {
+            // 全局替换需要全局标记
+            this.isReplacing = true; // 更新状态
+            const markList: number[][] = LucenceCore._cache.value.feature.search.result.list as number[][];
+            // 进行批量替换操作
+            let range: Range | null = this.getSearchRangeAt(true);
+            // 全局替换的逻辑较为复杂，需要对SearchUtil#highlightSelection进行单独分离重构
+            for (let marker of markList) {
+                range = SearchUtil.onlyGetHighlightRange(
+                    marker[0],
+                    marker[1],
+                    LucenceCore._cache.value.feature.search.condition.regular ? marker[2] : marker[0],
+                    LucenceCore._cache.value.feature.search.condition.regular ?
+                        marker[3] : marker[1] + (document.getElementById("amber-search--input") as HTMLInputElement).value!.length);
+                if (!range) break;
+                range.deleteContents();
+                range.insertNode(document.createTextNode(value));
+            }
+            this.isReplacing = false; // 结束状态
+        } else {
+            // 单次替换直接向下深度搜索
+            const range: Range | null = this.locateSearchResultAt(true);
+            if (range) {
+                range.deleteContents();
+                range.insertNode(document.createTextNode(value));
+            }
+        }
+    }
+
     /**
      * 执行一次查找，如果查找处于关闭状态那么清空结果和缓存，不进行查找。
      * 如果查找框内为空则从选择区域直接拷贝到查询框中作为条件进行查询。同
@@ -466,8 +510,9 @@ export class LucenceCore {
      * {@link SearchUtil#updateHighlight} 方法进行指定条件查找
      */
     public doSearch(): void {
-        // 未启用搜索需要清空容器
-        if (!LucenceCore._cache.value.feature.search.enable) {
+        // 未启用搜索或正在进行替换操作那么需要清空容器
+        if (!LucenceCore._cache.value.feature.search.enable ||
+            this.isReplacing) {
             const amberContainer = 
                 document.getElementById("amber-highlight--group");
             if (amberContainer) {
@@ -505,25 +550,6 @@ export class LucenceCore {
     }
 
     /**
-     * 对文本内容进行逐个替换和全局替换
-     * @param isGlobal 是否为全局替换
-     */
-    public doReplacing(isGlobal: boolean) {
-        if (!LucenceCore._cache.value.feature.search.replace ||
-            LucenceCore._cache.value.feature.search.result.total === 0) {
-            return;
-        }
-        const value: string =
-            (document.getElementById("amber-search--replacing") as HTMLInputElement).value!;
-        // 直接往下文定位到最近的结果进行全字替换
-        const range: Range | null = this.locateSearchResultAt(true);
-        if (range) {
-            range.deleteContents();
-            range.insertNode(document.createTextNode(value));
-        }
-    }
-
-    /**
      * 当向下或向上查找时调用该方法来定位到高亮的搜索内容上。
      * @param isDown 是否是向下查找
      */
@@ -533,6 +559,19 @@ export class LucenceCore {
         const { awaitArr, selectIndex } = result;
         LucenceCore._cache.value.feature.search.result.hoverOn = selectIndex;
         return this.highlightResult(awaitArr);
+    }
+    
+    private getSearchRangeAt(isDown: boolean): Range | null {
+        const result = this.locateNearestOne(isDown);
+        if (!result) return null;
+        const { awaitArr } = result;
+        return SearchUtil.onlyGetHighlightRange(
+            awaitArr[0],
+            awaitArr[1],
+            LucenceCore._cache.value.feature.search.condition.regular ?
+                awaitArr[2] : awaitArr[0],
+            LucenceCore._cache.value.feature.search.condition.regular ?
+                awaitArr[3] : awaitArr[1] + (document.getElementById("amber-search--input") as HTMLInputElement).value!.length);
     }
 
     /**
