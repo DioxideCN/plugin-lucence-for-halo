@@ -59,7 +59,6 @@ export const SearchUtil = {
                 const endColumn = match.index + match[0].length - lastNewlineBeforeEnd;
                 markList.push([startLine, startColumn, endLine, endColumn]);
             });
-            
             return { total, markList };
         } else {
             return {};

@@ -471,6 +471,11 @@ export class LucenceCore {
             LucenceCore._cache.value.feature.search.result.total === 0) {
             return;
         }
+        let regex: RegExp | null = null;
+        if (LucenceCore._cache.value.feature.search.condition.regular) {
+            const _value_: string = (document.getElementById("amber-search--input") as HTMLInputElement).value;
+            regex = new RegExp(_value_);
+        }
         const value: string =
             (document.getElementById("amber-search--replacing") as HTMLInputElement).value!;
         if (isGlobal) {
@@ -488,17 +493,28 @@ export class LucenceCore {
                     LucenceCore._cache.value.feature.search.condition.regular ?
                         marker[3] : marker[1] + (document.getElementById("amber-search--input") as HTMLInputElement).value!.length);
                 if (!range) break;
-                range.deleteContents();
-                range.insertNode(document.createTextNode(value));
+                this.replaceRangeContent(range, regex, value);
             }
-            this.isReplacing = false; // 结束状态
         } else {
             // 单次替换直接向下深度搜索
             const range: Range | null = this.locateSearchResultAt(true);
-            if (range) {
-                range.deleteContents();
-                range.insertNode(document.createTextNode(value));
-            }
+            this.replaceRangeContent(range, regex, value);
+        }
+        this.eventHolder.callSeries("content_change");
+        this.isReplacing = false; // 结束状态
+    }
+    
+    private replaceRangeContent(range: Range | null, 
+                                regex: RegExp | null,
+                                value: string): void {
+        if (!range) return;
+        if (regex) {
+            // 正则替换
+            LucenceCore.replaceContentInRange(range!, regex!, value);
+        } else {
+            // 全字替换
+            range.deleteContents();
+            range.insertNode(document.createTextNode(value));
         }
     }
 
@@ -758,6 +774,26 @@ export class LucenceCore {
         for (let element of elements) {
             hljs.highlightElement(element as HTMLElement);
         }
+    }
+
+    /**
+     * 对Range区域内的文本进行正则替换
+     * @param range 选区
+     * @param regex 正则表达式
+     * @param value 替换值
+     */
+    private static replaceContentInRange(range: Range, 
+                                         regex: RegExp, 
+                                         value: string): void {
+        let fragment: DocumentFragment = range.cloneContents();
+        let tempDiv: HTMLDivElement = document.createElement("div");
+        tempDiv.appendChild(fragment);
+        let htmlContent: string = tempDiv.innerHTML;
+        let replacedContent: string = htmlContent.replace(regex, value);
+        let newDiv: HTMLDivElement = document.createElement("div");
+        newDiv.innerHTML = replacedContent;
+        range.deleteContents();
+        range.insertNode(newDiv);
     }
     
 }
