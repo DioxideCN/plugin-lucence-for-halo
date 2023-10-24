@@ -573,6 +573,21 @@ export class LucenceCore {
         if (!result) return null;
         const { awaitArr, selectIndex } = result;
         LucenceCore._cache.value.feature.search.result.hoverOn = selectIndex;
+        // 处理跟随滚动
+        const halfHeight: number = this.area.editor.clientHeight / 2;
+        const maxScroll: number = this.area.editor.scrollHeight - this.area.editor.clientHeight;
+        const topDistance: number = parseInt((document.getElementById("amber-highlight--group")!.childNodes[selectIndex - 1] as HTMLElement).style.top);
+        const newScrollTop: number = topDistance - halfHeight;
+        if (newScrollTop < 0) {
+            // 不在半屏以内
+            this.area.editor.scrollTop = 0;
+        } else if (newScrollTop > maxScroll) {
+            // 超过最大滚动
+            this.area.editor.scrollTop = maxScroll;
+        } else if (newScrollTop >= 0 && newScrollTop <= maxScroll) {
+            // 合法的滚动范围内
+            this.area.editor.scrollTop = newScrollTop;
+        }
         return this.highlightResult(awaitArr);
     }
     

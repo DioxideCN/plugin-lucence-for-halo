@@ -92,16 +92,16 @@
                             <i class="fa-solid fa-arrow-up amber-popup--last" 
                                :class="LucenceCore.cache.value.feature.search.result.total === 0 ? 'disable' : ''" 
                                @click="core.locateSearchResultAt(false)"
-                               title="上一项">
+                               title="上一个匹配项">
                             </i>
                             <i class="fa-solid fa-arrow-down amber-popup--next" 
                                :class="LucenceCore.cache.value.feature.search.result.total === 0 ? 'disable' : ''" 
                                @click="core.locateSearchResultAt(true)"
-                               title="下一项">
+                               title="下一个匹配项">
                             </i>
                             <i class="fa-solid fa-xmark amber-popup--close" 
                                @click="core.toggle.search()"
-                               title="关闭搜索">
+                               title="关闭">
                             </i>
                         </div>
                     </div>
