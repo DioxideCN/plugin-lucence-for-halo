@@ -77,9 +77,7 @@ export const SearchUtil = {
                       markList: number[][] | undefined,
                       searchText: string): void => {
         const amberContainer: HTMLElement | null = document.getElementById("amber-highlight--group");
-        if (!amberContainer) {
-            return;
-        }
+        if (!amberContainer) return;
         // 清空高亮
         amberContainer.innerHTML = "";
         if (total && markList) {
@@ -87,7 +85,7 @@ export const SearchUtil = {
             searchResult.hoverOn = 1;
             searchResult.list = markList;
             const editorArea: Element = document.getElementsByClassName('ProseMirror')[0]!;
-            const divs = Array.from(editorArea.children);
+            const divs: Element[] = Array.from(editorArea.children);
             if (searchCondition.regular) {
                 // 正则匹配 [[start_row, start_col, end_row, end_col]]
                 markList.forEach((range: number[]): void => {
@@ -97,18 +95,24 @@ export const SearchUtil = {
                         const div: Element = divs[startRow - 1];
                         SearchUtil.renderHighlight(div, startCol, endCol);
                     } else {
-                        // 处理开始行
-                        let startDiv: Element = divs[startRow - 1];
-                        SearchUtil.renderHighlight(startDiv, startCol, startDiv ? startDiv.textContent!.length + 1 : 1);
-                        // 处理结束行
-                        let endDiv: Element = divs[endRow - 1];
-                        SearchUtil.renderHighlight(endDiv, 1, endCol);
+                        // 高亮开始行到结束行及其之间的所有dom
+                        for (let i = startRow - 1; i <= endRow - 1; i++) {
+                            const currentDiv = divs[i];
+                            if (!currentDiv) continue;
+                            let startOffset = 
+                                (i === startRow - 1) ? 
+                                    startCol : 1;
+                            let endOffset = 
+                                (i === endRow - 1) ? 
+                                    endCol : currentDiv.textContent!.length + 1;
+                            SearchUtil.renderHighlight(currentDiv, startOffset, endOffset);
+                        }
                     }
                 });
             } else {
                 // 纯文本匹配 [[start_row, start_col]] -> += searching.length
                 markList.forEach(range => {
-                    const [startRow, startCol] = range;
+                    const [startRow, startCol]: number[] = range;
                     const div: Element = divs[startRow - 1]
                     SearchUtil.renderHighlight(div, startCol, startCol + searchText.length);
                 })

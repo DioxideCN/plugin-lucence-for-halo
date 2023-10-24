@@ -238,7 +238,7 @@
                                     {{ core.plugins.value[pluginStore.activeOn].detail.description }}
                                 </template>
                                 <template v-else-if="pluginStore.actionOn === 1">
-                                    配置
+                                    仍处于开发状态，最新状态请关注GitHub
                                 </template>
                                 <template v-else-if="pluginStore.actionOn === 2">
                                     <ul class="ext-list--body">

@@ -523,8 +523,11 @@ export class LucenceCore {
      * {@link SearchUtil#updateHighlight} 方法进行指定条件查找
      */
     public doSearch(): void {
+        const value: string =
+            (document.getElementById("amber-search--input") as HTMLInputElement).value!;
         // 未启用搜索或正在进行替换操作那么需要清空容器
         if (!LucenceCore._cache.value.feature.search.enable ||
+            value.length === 0 ||
             this.isReplacing) {
             const amberContainer = 
                 document.getElementById("amber-highlight--group");
@@ -535,9 +538,6 @@ export class LucenceCore {
             LucenceCore._cache.value.feature.search.result.hoverOn = 0;
             return;
         }
-        const value: string = 
-            (document.getElementById("amber-search--input") as HTMLInputElement).value!;
-        if (!value) return;
         if (!LucenceCore._cache.value.feature.search.condition.regular) {
             // 纯文本内容查询
             const { total, markList } = SearchUtil.text(
