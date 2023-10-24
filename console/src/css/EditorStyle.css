@@ -624,7 +624,7 @@ pre.hljs,
     background: var(--code-amber-input);
     border: 1px solid var(--code-amber-input-border);
     border-radius: 3px;
-    padding: 0 2px;
+    padding: 0 0 0 2px;
 }
 .amber-popup--ahead #amber-search--input,
 .amber-popup--ahead #amber-search--replacing {
@@ -1090,5 +1090,5 @@ table.ext-list--child_list tbody tr td code {
 
 .ProseMirror,
 .toastui-editor-contents {
-    font-family: Lato,Helvetica Neue,Helvetica,sans-serif;
+    font-family: "Cascadia Code", "PingFang SC", Consolas, "Courier New", monospace, Consolas, "Courier New", monospace;
 }

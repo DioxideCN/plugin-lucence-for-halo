@@ -3,14 +3,14 @@ import katex from 'katex';
 import mermaid from 'mermaid';
 import hljs from 'highlight.js';
 
-import { ref } from "vue";
-import { Editor } from "@toast-ui/editor";
-import { ContextUtil } from "@/util/ContextUtil";
-import { SearchUtil } from "@/util/SearchUtil";
-import type { AreaType, CacheType } from "@/core/TypeDefinition";
-import type { SelectionPos } from "@toast-ui/editor/types/editor";
-import type { Ref } from "vue";
-import type {PluginEvent, EventHandler, PluginHolder} from "@/extension/ArgumentPlugin";
+import type {Ref} from "vue";
+import {ref} from "vue";
+import {Editor} from "@toast-ui/editor";
+import {ContextUtil} from "@/util/ContextUtil";
+import {SearchUtil} from "@/util/SearchUtil";
+import type {AreaType, CacheType} from "@/core/TypeDefinition";
+import type {SelectionPos} from "@toast-ui/editor/types/editor";
+import type {EventHandler, PluginEvent, PluginHolder} from "@/extension/ArgumentPlugin";
 import {PluginEventHolder} from "@/core/BasicStructure";
 import type {AbstractPlugin} from "@/extension/BasePlugin";
 import {PluginResolver} from "@/core/PluginResolver";
@@ -321,8 +321,8 @@ export class LucenceCore {
         const { _wordCount, _characterCount } = ContextUtil.countWord(mdContent);
         // 从栈帧中唤醒所有文本变更事件
         this.tryCallContentEvent(
-            LucenceCore._cache.value.feature.count.words, 
-            _wordCount);
+            LucenceCore._cache.value.feature.count.characters,
+            _characterCount);
         // 更新统计的字数、词数、选中数、聚焦行、聚焦列
         LucenceCore._cache.value.feature.count = {
             words: _wordCount,
@@ -466,7 +466,7 @@ export class LucenceCore {
      * 这两个方法在调用时需要明确一点，前端对Selection的渲染是被调度到最后执行的，所以循环体系中调用{@link SearchUtil#highlightSelection}不会发生选区的持续变更，这会导致非常严重的错误，所以在全局替换中应该使用更抽象的{@link SearchUtil#onlyGetHighlightRange}方法来获取Range。
      * @param isGlobal 是否为全局替换
      */
-    public doReplacing(isGlobal: boolean) {
+    public doReplacing(isGlobal: boolean): void {
         if (!LucenceCore._cache.value.feature.search.replace ||
             LucenceCore._cache.value.feature.search.result.total === 0) {
             return;
@@ -481,41 +481,38 @@ export class LucenceCore {
         if (isGlobal) {
             // 全局替换需要全局标记
             this.isReplacing = true; // 更新状态
+            this.doSearch(); // 调用doSearch()更新一次Highlight容器
             const markList: number[][] = LucenceCore._cache.value.feature.search.result.list as number[][];
             // 进行批量替换操作
             let range: Range | null = this.getSearchRangeAt(true);
             // 全局替换的逻辑较为复杂，需要对SearchUtil#highlightSelection进行单独分离重构
-            for (let marker of markList) {
+            for (let i = markList.length - 1; i >= 0; i--) {
+                const marker: number[] = markList[i];
                 range = SearchUtil.onlyGetHighlightRange(
                     marker[0],
                     marker[1],
                     LucenceCore._cache.value.feature.search.condition.regular ? marker[2] : marker[0],
-                    LucenceCore._cache.value.feature.search.condition.regular ?
-                        marker[3] : marker[1] + (document.getElementById("amber-search--input") as HTMLInputElement).value!.length);
+                    LucenceCore._cache.value.feature.search.condition.regular ? marker[3] : marker[1] + (document.getElementById("amber-search--input") as HTMLInputElement).value!.length);
                 if (!range) break;
                 this.replaceRangeContent(range, regex, value);
             }
+            this.isReplacing = false; // 结束状态
         } else {
             // 单次替换直接向下深度搜索
-            const range: Range | null = this.locateSearchResultAt(true);
+            const range: Range | null = this.getSearchRangeAt(true);
             this.replaceRangeContent(range, regex, value);
         }
         this.eventHolder.callSeries("content_change");
-        this.isReplacing = false; // 结束状态
     }
     
     private replaceRangeContent(range: Range | null, 
                                 regex: RegExp | null,
                                 value: string): void {
         if (!range) return;
-        if (regex) {
-            // 正则替换
-            LucenceCore.replaceContentInRange(range!, regex!, value);
-        } else {
-            // 全字替换
-            range.deleteContents();
-            range.insertNode(document.createTextNode(value));
-        }
+        const replacedContent: string = regex ? 
+            LucenceCore.replaceContentInRange(range!, regex!, value) :
+            value;
+        range.insertNode(document.createTextNode(replacedContent));
     }
 
     /**
@@ -534,6 +531,8 @@ export class LucenceCore {
             if (amberContainer) {
                 amberContainer.innerHTML = "";
             }
+            LucenceCore._cache.value.feature.search.result.total = 0;
+            LucenceCore._cache.value.feature.search.result.hoverOn = 0;
             return;
         }
         const value: string = 
@@ -770,7 +769,8 @@ export class LucenceCore {
      * 为所有class为".hljs"的容器渲染代码块
      */
     private static renderCodeBlock(): void {
-        const elements = document.getElementsByClassName('hljs');
+        const elements: HTMLCollectionOf<Element> = 
+            document.getElementsByClassName('hljs');
         for (let element of elements) {
             hljs.highlightElement(element as HTMLElement);
         }
@@ -784,16 +784,89 @@ export class LucenceCore {
      */
     private static replaceContentInRange(range: Range, 
                                          regex: RegExp, 
-                                         value: string): void {
+                                         value: string): string {
+        const flag: boolean = range.startContainer !== range.endContainer;
         let fragment: DocumentFragment = range.cloneContents();
-        let tempDiv: HTMLDivElement = document.createElement("div");
-        tempDiv.appendChild(fragment);
-        let htmlContent: string = tempDiv.innerHTML;
-        let replacedContent: string = htmlContent.replace(regex, value);
-        let newDiv: HTMLDivElement = document.createElement("div");
-        newDiv.innerHTML = replacedContent;
+        let content: string;
+        // 发生了跨DOM的替换 同时处理删除
+        if (flag) {
+            content = LucenceCore.getTextFromDiffNode(fragment).replace(/\n$/, "");
+            LucenceCore.deleteRangeContentsAndEmptyTags(range);
+        } else {
+            let tempDiv: HTMLDivElement = document.createElement("div");
+            tempDiv.appendChild(fragment);
+            content = tempDiv.innerText;
+            range.deleteContents();
+        }
+        // 生成替换后的文本内容
+        return content.replace(regex, value);
+    }
+
+    /**
+     * 删除{@code range}内的所有文本和Dom节点，再将{@code range}重新定位到
+     * 删除后文本的开头，方便{@code range}后续的添加操作能从删除后文本的开头开始
+     * @param range 待处理的range对象
+     */
+    private static deleteRangeContentsAndEmptyTags(range: Range): void {
+        const nodesToCheck: any[] = [];
+        const treeWalker: TreeWalker = document.createTreeWalker(
+            range.commonAncestorContainer,
+            NodeFilter.SHOW_ELEMENT,
+        {
+                acceptNode: function(node: Node): number {
+                    if (range.intersectsNode(node)) {
+                        return NodeFilter.FILTER_ACCEPT;
+                    }
+                    return NodeFilter.FILTER_SKIP;
+                }
+            });
+        const endContainer: Node = range.endContainer;
+        let currentNode: Node | null = treeWalker.nextNode();
+        while (currentNode) {
+            nodesToCheck.push(currentNode);
+            currentNode = treeWalker.nextNode();
+        }
         range.deleteContents();
-        range.insertNode(newDiv);
+        const startNode: Node = range.startContainer;
+        if (startNode.nodeType === Node.TEXT_NODE && 
+            startNode.nextSibling && 
+            startNode.nextSibling.nodeType === Node.TEXT_NODE) {
+            // @ts-ignore
+            startNode.appendData(startNode.nextSibling.data);
+            startNode.nextSibling.remove();
+        }
+        for (let i = nodesToCheck.length - 1; i >= 0; i--) {
+            const node = nodesToCheck[i];
+            if (node && node.nodeType === Node.ELEMENT_NODE) {
+                const text = node.textContent || "";
+                if (!text.trim()) {
+                    node.remove();
+                }
+            }
+        }
+        // 进行内容删除后的range需要重新设置start将其与end位置进行对齐
+        range.setStart(endContainer, 0);
+        range.setEnd(endContainer, 0);
+    }
+
+    private static getTextFromDiffNode(node: Node): string {
+        if (node.nodeType === Node.TEXT_NODE) {
+            return node.nodeValue || '';
+        }
+        if (node.nodeType === Node.ELEMENT_NODE &&
+            (node as Element).tagName === 'BR') {
+            return '\n';
+        }
+        const isBlockElement: boolean = 
+            node.nodeType === Node.ELEMENT_NODE && 
+            (['DIV', 'P'].includes((node as Element).tagName));
+        let text: string = '';
+        let child: ChildNode | null = node.firstChild;
+        while (child) {
+            text += this.getTextFromDiffNode(child);
+            child = child.nextSibling;
+        }
+        return isBlockElement ? text + '\n' : text;
     }
     
 }

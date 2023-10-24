@@ -36,7 +36,7 @@ export const SearchUtil = {
         if (context && search) {
             let total: number = 0;
             const markList: number[][] = [];
-            const regexFlags = sensitive ? 'gm' : 'gmi';
+            const regexFlags: "gm" | "gmi" = sensitive ? 'gm' : 'gmi';
             let regex: RegExp;
             try {
                 regex = new RegExp(search, regexFlags);
@@ -99,7 +99,7 @@ export const SearchUtil = {
                     } else {
                         // 处理开始行
                         let startDiv: Element = divs[startRow - 1];
-                        SearchUtil.renderHighlight(startDiv, startCol, startDiv.textContent!.length + 1);
+                        SearchUtil.renderHighlight(startDiv, startCol, startDiv ? startDiv.textContent!.length + 1 : 1);
                         // 处理结束行
                         let endDiv: Element = divs[endRow - 1];
                         SearchUtil.renderHighlight(endDiv, 1, endCol);
