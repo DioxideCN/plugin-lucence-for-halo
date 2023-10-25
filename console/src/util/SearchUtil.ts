@@ -35,7 +35,7 @@ export const SearchUtil = {
     regex: (context: string, search: string, sensitive: boolean) => {
         if (context && search) {
             let total: number = 0;
-            const markList: number[][] = [];
+            let markList: number[][] = [];
             const regexFlags: "gm" | "gmi" = sensitive ? 'gm' : 'gmi';
             let regex: RegExp;
             try {
@@ -44,21 +44,26 @@ export const SearchUtil = {
                 return {};
             }
             // @ts-ignore
-            const matches = Array.from(context.matchAll(regex));
+            const matches: RegExpMatchArray[] = Array.from(context.matchAll(regex));
             matches.forEach(match => {
-                total++;
-                // @ts-ignore
-                const startLine = context.substring(0, match.index).split('\n').length;
-                // @ts-ignore
-                const endLine = startLine + match[0].split('\n').length - 1;
-                // @ts-ignore
-                const startColumn = match.index - context.lastIndexOf('\n', match.index);
-                // @ts-ignore
-                const lastNewlineBeforeEnd = context.lastIndexOf('\n', match.index + match[0].length - 1);
-                // @ts-ignore
-                const endColumn = match.index + match[0].length - lastNewlineBeforeEnd;
+                const startLine: number = context.substring(0, match.index).split('\n').length;
+                const endLine: number = 
+                    startLine + match[0].split('\n').length - 1;
+                const startColumn: number = 
+                    match.index! - context.lastIndexOf('\n', match.index);
+                const lastNewlineBeforeEnd: number = 
+                    context.lastIndexOf('\n', match.index! + match[0].length - 1);
+                const endColumn: number = 
+                    match.index! + match[0].length - lastNewlineBeforeEnd;
                 markList.push([startLine, startColumn, endLine, endColumn]);
             });
+            markList = markList.filter(([startLine, startColumn, endLine, endColumn]): boolean => {
+                // 过滤第二个元素为0的子数组
+                if (startColumn === 0) return false;
+                // 过滤第一个元素与第三个元素相同并且第二个元素和第四个元素相同的子数组
+                return !(startLine === endLine && startColumn === endColumn);
+            });
+            total = markList.length;
             return { total, markList };
         } else {
             return {};
