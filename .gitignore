@@ -73,4 +73,5 @@ application-local.properties
 /admin-frontend/node_modules/
 /workplace/
 /src/main/resources/console/
-/src/main/resources/static/*
+/src/main/resources/static/katex
+/src/main/resources/static/mermaid
