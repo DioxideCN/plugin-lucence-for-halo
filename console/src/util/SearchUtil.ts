@@ -45,7 +45,7 @@ export const SearchUtil = {
             }
             // @ts-ignore
             const matches: RegExpMatchArray[] = Array.from(context.matchAll(regex));
-            matches.forEach(match => {
+            matches.forEach((match: RegExpMatchArray) => {
                 const startLine: number = context.substring(0, match.index).split('\n').length;
                 const endLine: number = 
                     startLine + match[0].split('\n').length - 1;
@@ -57,7 +57,7 @@ export const SearchUtil = {
                     match.index! + match[0].length - lastNewlineBeforeEnd;
                 markList.push([startLine, startColumn, endLine, endColumn]);
             });
-            markList = markList.filter(([startLine, startColumn, endLine, endColumn]): boolean => {
+            markList = markList.filter(([startLine, startColumn, endLine, endColumn]: number[]): boolean => {
                 // 过滤第二个元素为0的子数组
                 if (startColumn === 0) return false;
                 // 过滤第一个元素与第三个元素相同并且第二个元素和第四个元素相同的子数组
