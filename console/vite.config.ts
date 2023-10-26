@@ -3,12 +3,26 @@ import { fileURLToPath, URL } from "url";
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import vueJsx from "@vitejs/plugin-vue-jsx";
+// @ts-ignore
+import { viteStaticCopy as ViteStaticCopy } from "vite-plugin-static-copy";
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
       vue(),
       vueJsx(),
+      ViteStaticCopy({
+          targets: [
+              {
+                  src: `./node_modules/katex/dist/*`,
+                  dest: "../static/katex",
+              },
+              {
+                  src: `./node_modules/mermaid/dist/*`,
+                  dest: "../static/mermaid",
+              },
+          ],
+      }),
   ],
   resolve: {
     alias: {
@@ -22,7 +36,7 @@ export default defineConfig({
     emptyOutDir: true,
     lib: {
       entry: "src/index.ts",
-      name: "ToolBench",
+      name: "plugin-lucence-for-halo",
       formats: ["iife"],
       fileName: () => "main.js",
     },

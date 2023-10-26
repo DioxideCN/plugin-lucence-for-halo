@@ -14,6 +14,7 @@ import type {EventHandler, PluginEvent, PluginHolder} from "@/extension/Argument
 import {PluginEventHolder} from "@/core/BasicStructure";
 import type {AbstractPlugin} from "@/extension/BasePlugin";
 import {PluginResolver} from "@/core/PluginResolver";
+import {LineWalker} from "@/kernel/LineWalker";
 
 export class LucenceCore {
     
@@ -67,6 +68,8 @@ export class LucenceCore {
     
     // plugin resolver
     private readonly resolver: PluginResolver;
+    
+    private readonly lineWalker: LineWalker;
 
     /**
      * 构造器内完成对ToastUIEditor的定义
@@ -78,10 +81,6 @@ export class LucenceCore {
         if (!editorOuter) {
             throw new Error('Cannot find element from id \'#toast-editor\'!');
         }
-        const lineNumberDOM: HTMLDivElement = document.createElement('div');
-        lineNumberDOM.classList.add('editor-line-number');
-        lineNumberDOM.classList.add('unselectable');
-        lineNumberDOM.innerHTML = '<div class="line-item">1</div>';
         this.instance = new Editor({
             el: editorOuter,
             previewStyle: 'vertical',
@@ -96,17 +95,20 @@ export class LucenceCore {
                 codeBlock(node: any): any {
                     if (node.info === "mermaid") {
                         return [
-                            { type: 'openTag', tagName: 'div', classNames: [node.info, 'mermaid-box'] },
+                            { type: 'openTag', tagName: 'div', classNames: [node.info, 'mermaid-box', 'show-mermaid'] },
                             { type: 'text', content: node.literal! },
-                            { type: 'closeTag', tagName: 'div' }
+                            { type: 'closeTag', tagName: 'div' },
+                            { type: 'openTag', tagName: 'div', classNames: [node.info, 'hide-mermaid'] },
+                            { type: 'text', content: node.literal! },
+                            { type: 'closeTag', tagName: 'div' },
                         ];
                     }
                     return [
-                        { type: 'openTag', tagName: 'pre', classNames: ['hljs', 'language-' + node.info] },
-                        { type: 'openTag', tagName: 'code', classNames: ['language-' + node.info] },
+                        { type: 'openTag', tagName: 'pre', classNames: ['language-' + node.info] },
+                        { type: 'openTag', tagName: 'code', classNames: ['hljs', 'language-' + node.info] },
                         { type: 'text', content: node.literal! },
                         { type: 'closeTag', tagName: 'code' },
-                        { type: 'closeTag', tagName: 'pre' }
+                        { type: 'closeTag', tagName: 'pre' },
                     ];
                 },
                 text(node: any): any {
@@ -159,9 +161,14 @@ export class LucenceCore {
                 latex(node: any): any {
                     // 渲染块状latex
                     const raw: string = node.literal;
-                    const span = document.createElement('span');
+                    const span: HTMLSpanElement = document.createElement('span');
                     const tokens: any = [
-                        { type: 'openTag', tagName: 'p', classNames: ['lucency-latex'], outerNewLine: true }
+                        { 
+                            type: 'openTag', 
+                            tagName: 'p', 
+                            classNames: ['lucence-block-latex'], 
+                            outerNewLine: true 
+                        }
                     ];
                     try {
                         katex.render(raw, span);
@@ -192,11 +199,11 @@ export class LucenceCore {
             split: document.getElementsByClassName('toastui-editor-md-splitter')[0]! as HTMLElement,
             // markdown编辑器
             mdEditor: document.getElementsByClassName('toastui-editor md-mode')[0].getElementsByClassName('ProseMirror')[0]! as HTMLElement,
-            // 暂不定义
-            lineBox: lineNumberDOM,
         }
         this.resolver = new PluginResolver(this);
         this.eventHolder = new PluginEventHolder(this.resolver);
+        // 初始化行数容器对象
+        this.lineWalker = LineWalker.init(this.instance);
     }
 
     /**
@@ -230,8 +237,6 @@ export class LucenceCore {
                 that.doSearch();
             }
         });
-        // 构建行数容器
-        this.buildLineContainer();
         // 事件更新驱动
         this.instance.on('caretChange', (): void => {
             this.useUpdate();
@@ -300,56 +305,27 @@ export class LucenceCore {
     }
 
     /**
-     * 构建行数容器，用来显示行
-     */
-    private buildLineContainer(): void {
-        // 构造高亮标记容器
-        const amberHighlightDOM = document.createElement('div');
-        amberHighlightDOM.id = "amber-highlight--group";
-        this.area.editor.insertBefore(this.area.lineBox, this.area.editor.childNodes[0]);
-        this.area.editor.append(amberHighlightDOM);
-    }
-
-    /**
      * 更新所有缓存
      */
     private useUpdate() {
-        const selection: SelectionPos = this.instance.getSelection();
         const mdContent: string = this.instance.getMarkdown();
-        const focusText: string = this.instance.getSelectedText();
         // 更新统计
-        const { _wordCount, _characterCount } = ContextUtil.countWord(mdContent);
+        const { _wordCount, _characterCount } = 
+            ContextUtil.countWord(mdContent);
         // 从栈帧中唤醒所有文本变更事件
         this.tryCallContentEvent(
             LucenceCore._cache.value.feature.count.characters,
             _characterCount);
+        const {row, col, characters}: any = this.lineWalker.getFocusInfo();
         // 更新统计的字数、词数、选中数、聚焦行、聚焦列
         LucenceCore._cache.value.feature.count = {
             words: _wordCount,
             characters: _characterCount,
-            selected: ContextUtil.Line.countSelect(focusText),
+            selected: characters,
         }
         LucenceCore._cache.value.feature.focus = {
-            row: (selection as [number[], number[]])[1][0],
-            col: (selection as [number[], number[]])[1][1],
-        }
-        // 同步更新行容器
-        LucenceCore._cache.value.line.oldLineCount = this.area.lineBox.children.length - 8;
-        const getter = ContextUtil.Line.count(
-            this.area.mdEditor, 
-            selection,
-            LucenceCore._cache.value.line.prevIndexMap,
-            LucenceCore._cache.value.line.oldLineCount);
-        // 更新空行补齐的集合
-        LucenceCore._cache.value.line = {
-            prevIndexMap: getter.prevIndexMap,
-            oldLineCount: getter.oldLineCount,
-        }
-        // 更新行容器
-        const fragment = getter.newLineContainer;
-        if (fragment) {
-            this.area.lineBox.innerHTML = '';
-            this.area.lineBox.appendChild(fragment);
+            row: row,
+            col: col,
         }
     }
 
@@ -471,10 +447,11 @@ export class LucenceCore {
             LucenceCore._cache.value.feature.search.result.total === 0) {
             return;
         }
+        const regexFlags: "gm" | "gmi" = LucenceCore._cache.value.feature.search.condition.capitalization ? 'gm' : 'gmi';
         let regex: RegExp | null = null;
         if (LucenceCore._cache.value.feature.search.condition.regular) {
             const _value_: string = (document.getElementById("amber-search--input") as HTMLInputElement).value;
-            regex = new RegExp(_value_);
+            regex = new RegExp(_value_, regexFlags);
         }
         const value: string =
             (document.getElementById("amber-search--replacing") as HTMLInputElement).value!;
@@ -499,7 +476,7 @@ export class LucenceCore {
             this.isReplacing = false; // 结束状态
         } else {
             // 单次替换直接向下深度搜索
-            const range: Range | null = this.getSearchRangeAt(true);
+            const range: Range | null = this.locateSearchResultAt(true);
             this.replaceRangeContent(range, regex, value);
         }
         this.eventHolder.callSeries("content_change");
@@ -562,6 +539,39 @@ export class LucenceCore {
                 markList,
                 value);
         }
+    }
+
+    /**
+     * 返回编辑器渲染后的HTML内容
+     */
+    public getHTML(): string {
+        let newHtml = '';
+        const childNodes = 
+            document.querySelectorAll(".toastui-editor-md-preview .toastui-editor-contents")[0].childNodes;
+        for (let i = 0; i < childNodes.length; i++) {
+            const node = childNodes[i];
+            if (node.nodeType === Node.ELEMENT_NODE) {
+                let clone: Element = node.cloneNode(true) as Element;
+                // 检查并处理mermaid类型
+                if (clone.classList.contains('hide-mermaid')) {
+                    clone.classList.remove('hide-mermaid');
+                    clone.classList.add('mermaid', 'mermaid-box');
+                } else if (clone.classList.contains('mermaid') && clone.classList.contains('mermaid-box') && clone.classList.contains('show-mermaid')) {
+                    // 如果包含mermaid, mermaid-box, 和show-mermaid，则不进行任何操作
+                    continue;
+                }
+                clone.removeAttribute('data-nodeid');
+                newHtml += clone.outerHTML;
+            }
+        }
+        return newHtml;
+    }
+
+    /**
+     * 返回编辑器的原始的Markdown内容
+     */
+    public getMarkdown(): string {
+        return this.instance.getMarkdown();
     }
 
     /**

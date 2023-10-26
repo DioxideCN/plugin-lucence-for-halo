@@ -41,5 +41,4 @@ export type AreaType = {
     editor: HTMLElement,
     split: HTMLElement,
     mdEditor: HTMLElement,
-    lineBox: HTMLElement,
 }

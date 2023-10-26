@@ -4,7 +4,6 @@ import {Stack} from "@/core/BasicStructure";
 import type {ToolbarItemOptions} from "@toast-ui/editor/types/ui";
 import type {LucenceCore} from "@/core/LucenceCore";
 import {DefaultPlugin} from "@/plugin/DefaultPlugin";
-import {TestPlugin} from "@/plugin/TestPlugin";
 
 export class PluginResolver {
     
@@ -102,8 +101,6 @@ export class PluginResolver {
         // 硬加载基本插件
         const defaultOne: DefaultPlugin = new DefaultPlugin(this.core);
         this.load(defaultOne);
-        const testOne: TestPlugin = new TestPlugin(this.core);
-        this.load(testOne);
         // 扫描
         this.scanAll();
         

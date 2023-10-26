@@ -23,6 +23,7 @@
     "katex": "^0.16.8",
     "mermaid": "9.4.3",
     "prismjs": "^1.29.0",
+    "vite-plugin-static-copy": "^0.17.0",
     "vue": "^3.2.41"
   },
   "devDependencies": {
