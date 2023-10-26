@@ -1119,3 +1119,5 @@ pre code.hljs {
 }
 
 .hide-mermaid { display: none; }
+
+main.content { height: 100vh; overflow: hidden; }

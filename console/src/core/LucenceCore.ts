@@ -94,6 +94,10 @@ export class LucenceCore {
             customHTMLRenderer: {
                 codeBlock(node: any): any {
                     if (node.info === "mermaid") {
+                        // 预热渲染Mermaid语法将渲染后的HTML文本再返回到渲染区
+                        
+                        // 保留一份隐藏的原始的未渲染的内容
+                        
                         return [
                             { type: 'openTag', tagName: 'div', classNames: [node.info, 'mermaid-box', 'show-mermaid'] },
                             { type: 'text', content: node.literal! },
@@ -112,7 +116,7 @@ export class LucenceCore {
                     ];
                 },
                 text(node: any): any {
-                    // 渲染latex公式
+                    // 渲染行内latex
                     const content: string = node.literal;
                     const regex: RegExp = /\$(.+?)\$/g;
                     let result: any;
