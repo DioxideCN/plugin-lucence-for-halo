@@ -740,25 +740,25 @@ pre.hljs,
 /* mermaid */
 
 .mermaid.mermaid-box { margin-top: 20px; }
-.mermaid.mermaid-box svg {
+.mermaid.mermaid-box .mermaid-to-render svg {
     margin: 0 auto;
     padding: 10px 0;
     border-radius: 5px;
     background: var(--code-amber-block-bg);
 }
-.mermaid.mermaid-box svg #flowchart-pointEnd path,
-.mermaid.mermaid-box svg #arrowhead path,
-.mermaid.mermaid-box svg .edgePaths path,
-.mermaid.mermaid-box svg .cluster rect,
-.mermaid.mermaid-box svg text.messageText {
+.mermaid.mermaid-box .mermaid-to-render svg #flowchart-pointEnd path,
+.mermaid.mermaid-box .mermaid-to-render svg #arrowhead path,
+.mermaid.mermaid-box .mermaid-to-render svg .edgePaths path,
+.mermaid.mermaid-box .mermaid-to-render svg .cluster rect,
+.mermaid.mermaid-box .mermaid-to-render svg text.messageText {
     fill: var(--display-p)!important;
 }
-.mermaid.mermaid-box svg #flowchart-pointEnd path,
-.mermaid.mermaid-box svg #arrowhead path,
-.mermaid.mermaid-box svg .messageText,
-.mermaid.mermaid-box svg .loopText,
-.mermaid.mermaid-box svg .loopText > tspan,
-.mermaid.mermaid-box svg line {
+.mermaid.mermaid-box .mermaid-to-render svg #flowchart-pointEnd path,
+.mermaid.mermaid-box .mermaid-to-render svg #arrowhead path,
+.mermaid.mermaid-box .mermaid-to-render svg .messageText,
+.mermaid.mermaid-box .mermaid-to-render svg .loopText,
+.mermaid.mermaid-box .mermaid-to-render svg .loopText > tspan,
+.mermaid.mermaid-box .mermaid-to-render svg line {
     stroke: var(--display-p)!important;
 }
 
@@ -1113,11 +1113,10 @@ table.ext-list--child_list tbody tr td code {
 .toastui-editor-contents {
     font-family: "Cascadia Code", "PingFang SC", Consolas, "Courier New", monospace, Consolas, "Courier New", monospace;
 }
-
-pre code.hljs {
-    padding: 0!important;
-}
-
 .hide-mermaid { display: none; }
-
+pre code.hljs { padding: 0!important; }
 main.content { height: 100vh; overflow: hidden; }
+.toastui-editor-md-list-item-style.toastui-editor-md-list-item-even {
+    color: var(--display-odd)!important;
+    font-weight: 400!important;
+}

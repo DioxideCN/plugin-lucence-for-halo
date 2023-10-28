@@ -368,9 +368,11 @@ function switchViewPlugin(index: number): void {
 onMounted(async () => {
     // 回显暴露的核心
     core = new LucenceCore(props.raw).build(function (): void {
-        emit('update:raw',     core.getMarkdown());
-        emit('update:content', core.getHTML());
-        emit('update',         core.getHTML());
+        const markdown: string = core.getMarkdown();
+        const html: string = core.getHTML();
+        emit('update:raw',     markdown);
+        emit('update:content', html);
+        emit('update',         html);
     });
 })
 </script>

@@ -69,7 +69,13 @@ export class LucenceCore {
     // plugin resolver
     private readonly resolver: PluginResolver;
     
+    // line walker
     private readonly lineWalker: LineWalker;
+
+    // 文本更新节流器
+    private updateThrottleTimer: number | undefined;
+    // 搜索节流器
+    private searchThrottleTimer: number | undefined;
 
     /**
      * 构造器内完成对ToastUIEditor的定义
@@ -94,24 +100,22 @@ export class LucenceCore {
             customHTMLRenderer: {
                 codeBlock(node: any): any {
                     if (node.info === "mermaid") {
-                        // 预热渲染Mermaid语法将渲染后的HTML文本再返回到渲染区
-                        
-                        // 保留一份隐藏的原始的未渲染的内容
-                        
                         return [
                             { type: 'openTag', tagName: 'div', classNames: [node.info, 'mermaid-box', 'show-mermaid'] },
-                            { type: 'text', content: node.literal! },
-                            { type: 'closeTag', tagName: 'div' },
-                            { type: 'openTag', tagName: 'div', classNames: [node.info, 'hide-mermaid'] },
-                            { type: 'text', content: node.literal! },
+                                { type: 'openTag', tagName: 'div', classNames: [node.info, 'mermaid-to-render'] },
+                                    { type: 'text', content: node.literal! },
+                                { type: 'closeTag', tagName: 'div' },
+                                { type: 'openTag', tagName: 'div', classNames: [node.info, 'hide-mermaid'] },
+                                    { type: 'text', content: node.literal! },
+                                { type: 'closeTag', tagName: 'div' },
                             { type: 'closeTag', tagName: 'div' },
                         ];
                     }
                     return [
                         { type: 'openTag', tagName: 'pre', classNames: ['language-' + node.info] },
-                        { type: 'openTag', tagName: 'code', classNames: ['hljs', 'language-' + node.info] },
-                        { type: 'text', content: node.literal! },
-                        { type: 'closeTag', tagName: 'code' },
+                            { type: 'openTag', tagName: 'code', classNames: ['hljs', 'language-' + node.info] },
+                                { type: 'text', content: node.literal! },
+                            { type: 'closeTag', tagName: 'code' },
                         { type: 'closeTag', tagName: 'pre' },
                     ];
                 },
@@ -248,8 +252,8 @@ export class LucenceCore {
         this.instance.on('updatePreview', (): void => { 
             LucenceCore.renderCodeBlock(); 
         });
-        this.instance.on('afterPreviewRender', (): void => { 
-            LucenceCore.renderMermaid(); 
+        this.instance.on('afterPreviewRender', (): void => {
+            LucenceCore.renderMermaid();
         });
         // 预热
         const mdEditor: Element = 
@@ -275,11 +279,32 @@ export class LucenceCore {
             {
                 type: "content_change",
                 desc: "动态更新搜索结果",
-                callback: () => {
+                callback: (): void => {
                     // 更新搜索内容
                     this.doSearch();
                 },
             });
+        // 文本内容观察者
+        const observer = new MutationObserver((mutationsList: MutationRecord[], observer: MutationObserver): void => {
+            if (this.updateThrottleTimer) {
+                clearTimeout(this.updateThrottleTimer);
+            }
+            this.updateThrottleTimer = window.setTimeout(() => {
+                for (let mutation of mutationsList) {
+                    if (mutation.type === 'childList' || mutation.type === 'characterData') {
+                        this.eventHolder.callSeries("content_change");
+                        break;
+                    }
+                }
+            }, 50);
+        });
+        // 开始观察内容变化
+        observer.observe(this.area.mdEditor, {
+            childList: true,
+            attributes: true,
+            characterData: true,
+            subtree: true,
+        });
         // 在构建成功后将instance实例暴露到全局
         return this;
     }
@@ -311,7 +336,7 @@ export class LucenceCore {
     /**
      * 更新所有缓存
      */
-    private useUpdate() {
+    private useUpdate(): void {
         const mdContent: string = this.instance.getMarkdown();
         // 更新统计
         const { _wordCount, _characterCount } = 
@@ -340,25 +365,27 @@ export class LucenceCore {
      * @param rawCount 原始字数
      * @param nowCount 更新后的字数
      */
-    private tryCallContentEvent(rawCount: number, nowCount: number): void {
-        if (rawCount < nowCount) {
-            this.eventHolder.callSeries("content_input");
-        } else if (rawCount > nowCount) {
-            this.eventHolder.callSeries("content_delete");
+    private tryCallContentEvent(rawCount: number, 
+                                nowCount: number): void {
+        if (this.updateThrottleTimer) {
+            clearTimeout(this.updateThrottleTimer);
         }
-        if (rawCount === nowCount) {
-            this.eventHolder.callSeries("content_select");
-            return;
-        } else {
-            this.eventHolder.callSeries("content_change");
-            return;
-        }
+        this.updateThrottleTimer = window.setTimeout((): void => {
+            if (rawCount < nowCount) {
+                this.eventHolder.callSeries("content_input");
+            } else if (rawCount > nowCount) {
+                this.eventHolder.callSeries("content_delete");
+            }
+            if (rawCount === nowCount) {
+                this.eventHolder.callSeries("content_select");
+            }
+        }, 50);
     }
 
     /**
      * 模式切换组
      */
-    public toggle = {
+    public toggle: any = {
         // 切换深浅色模式
         theme: (): boolean => {
             const editorDiv = document.getElementById('toast-editor');
@@ -463,7 +490,8 @@ export class LucenceCore {
             // 全局替换需要全局标记
             this.isReplacing = true; // 更新状态
             this.doSearch(); // 调用doSearch()更新一次Highlight容器
-            const markList: number[][] = LucenceCore._cache.value.feature.search.result.list as number[][];
+            const markList: number[][] = 
+                LucenceCore._cache.value.feature.search.result.list as number[][];
             // 进行批量替换操作
             let range: Range | null = this.getSearchRangeAt(true);
             // 全局替换的逻辑较为复杂，需要对SearchUtil#highlightSelection进行单独分离重构
@@ -490,10 +518,40 @@ export class LucenceCore {
                                 regex: RegExp | null,
                                 value: string): void {
         if (!range) return;
-        const replacedContent: string = regex ? 
-            LucenceCore.replaceContentInRange(range!, regex!, value) :
-            value;
+        let replacedContent: string;
+        if (regex) {
+            replacedContent = LucenceCore.replaceContentInRange(range!, regex!, value);
+        } else {
+            replacedContent = value;
+            range.deleteContents();
+        }
         range.insertNode(document.createTextNode(replacedContent));
+    }
+
+    /**
+     * 对Range区域内的文本进行正则替换
+     * @param range 选区
+     * @param regex 正则表达式
+     * @param value 替换值
+     */
+    private static replaceContentInRange(range: Range,
+                                         regex: RegExp,
+                                         value: string): string {
+        const flag: boolean = range.startContainer !== range.endContainer;
+        let fragment: DocumentFragment = range.cloneContents();
+        let content: string;
+        // 发生了跨DOM的替换 同时处理删除
+        if (flag) {
+            content = LucenceCore.getTextFromDiffNode(fragment).replace(/\n$/, "");
+            LucenceCore.deleteRangeContentsAndEmptyTags(range);
+        } else {
+            let tempDiv: HTMLDivElement = document.createElement("div");
+            tempDiv.appendChild(fragment);
+            content = tempDiv.innerText;
+            range.deleteContents();
+        }
+        // 生成替换后的文本内容
+        return content.replace(regex, value);
     }
 
     /**
@@ -504,45 +562,50 @@ export class LucenceCore {
      * {@link SearchUtil#updateHighlight} 方法进行指定条件查找
      */
     public doSearch(): void {
-        const value: string =
-            (document.getElementById("amber-search--input") as HTMLInputElement).value!;
-        // 未启用搜索或正在进行替换操作那么需要清空容器
-        if (!LucenceCore._cache.value.feature.search.enable ||
-            value.length === 0 ||
-            this.isReplacing) {
-            const amberContainer = 
-                document.getElementById("amber-highlight--group");
-            if (amberContainer) {
-                amberContainer.innerHTML = "";
+        if (this.searchThrottleTimer) {
+            clearTimeout(this.searchThrottleTimer);
+        }
+        this.searchThrottleTimer = window.setTimeout(() => {
+            const value: string =
+                (document.getElementById("amber-search--input") as HTMLInputElement).value!;
+            // 未启用搜索或正在进行替换操作那么需要清空容器
+            if (!LucenceCore._cache.value.feature.search.enable ||
+                value.length === 0 ||
+                this.isReplacing) {
+                const amberContainer: HTMLElement | null =
+                    document.getElementById("amber-highlight--group");
+                if (amberContainer) {
+                    amberContainer.innerHTML = "";
+                }
+                LucenceCore._cache.value.feature.search.result.total = 0;
+                LucenceCore._cache.value.feature.search.result.hoverOn = 0;
+                return;
             }
-            LucenceCore._cache.value.feature.search.result.total = 0;
-            LucenceCore._cache.value.feature.search.result.hoverOn = 0;
-            return;
-        }
-        if (!LucenceCore._cache.value.feature.search.condition.regular) {
-            // 纯文本内容查询
-            const { total, markList } = SearchUtil.text(
-                this.instance.getMarkdown(), 
-                value,
-                LucenceCore._cache.value.feature.search.condition.capitalization);
-            SearchUtil.updateHighlight(
-                LucenceCore._cache.value.feature.search.result,
-                LucenceCore._cache.value.feature.search.condition,
-                total,
-                markList,
-                value);
-        } else {
-            const { total, markList } = SearchUtil.regex(
-                this.instance.getMarkdown(), 
-                value,
-                LucenceCore._cache.value.feature.search.condition.capitalization);
-            SearchUtil.updateHighlight(
-                LucenceCore._cache.value.feature.search.result,
-                LucenceCore._cache.value.feature.search.condition,
-                total,
-                markList,
-                value);
-        }
+            if (!LucenceCore._cache.value.feature.search.condition.regular) {
+                // 纯文本内容查询
+                const { total, markList }: any = SearchUtil.text(
+                    this.instance.getMarkdown(),
+                    value,
+                    LucenceCore._cache.value.feature.search.condition.capitalization);
+                SearchUtil.updateHighlight(
+                    LucenceCore._cache.value.feature.search.result,
+                    LucenceCore._cache.value.feature.search.condition,
+                    total,
+                    markList,
+                    value);
+            } else {
+                const { total, markList }: any = SearchUtil.regex(
+                    this.instance.getMarkdown(),
+                    value,
+                    LucenceCore._cache.value.feature.search.condition.capitalization);
+                SearchUtil.updateHighlight(
+                    LucenceCore._cache.value.feature.search.result,
+                    LucenceCore._cache.value.feature.search.condition,
+                    total,
+                    markList,
+                    value);
+            }
+        }, 50);
     }
 
     /**
@@ -553,15 +616,16 @@ export class LucenceCore {
         const childNodes = 
             document.querySelectorAll(".toastui-editor-md-preview .toastui-editor-contents")[0].childNodes;
         for (let i = 0; i < childNodes.length; i++) {
-            const node = childNodes[i];
+            const node: ChildNode = childNodes[i];
             if (node.nodeType === Node.ELEMENT_NODE) {
                 let clone: Element = node.cloneNode(true) as Element;
                 // 检查并处理mermaid类型
-                if (clone.classList.contains('hide-mermaid')) {
-                    clone.classList.remove('hide-mermaid');
-                    clone.classList.add('mermaid', 'mermaid-box');
-                } else if (clone.classList.contains('mermaid') && clone.classList.contains('mermaid-box') && clone.classList.contains('show-mermaid')) {
-                    // 如果包含mermaid, mermaid-box, 和show-mermaid，则不进行任何操作
+                if (clone.classList.contains('show-mermaid')) {
+                    let mermaidElement: Element = 
+                        clone.querySelectorAll('.hide-mermaid')[0];
+                    mermaidElement.classList.remove('hide-mermaid');
+                    mermaidElement.classList.add('mermaid-box');
+                    newHtml += mermaidElement.outerHTML;
                     continue;
                 }
                 clone.removeAttribute('data-nodeid');
@@ -783,18 +847,6 @@ export class LucenceCore {
     }
 
     /**
-     * 为所有class为".mermaid.mermaid-box"的容器渲染mermaid语法
-     */
-    private static renderMermaid(): void {
-        mermaid.init(
-            undefined,
-            document.querySelectorAll('.mermaid.mermaid-box'))
-            .catch(e => {
-                console.error(e);
-            });
-    }
-
-    /**
      * 为所有class为".hljs"的容器渲染代码块
      */
     private static renderCodeBlock(): void {
@@ -803,32 +855,6 @@ export class LucenceCore {
         for (let element of elements) {
             hljs.highlightElement(element as HTMLElement);
         }
-    }
-
-    /**
-     * 对Range区域内的文本进行正则替换
-     * @param range 选区
-     * @param regex 正则表达式
-     * @param value 替换值
-     */
-    private static replaceContentInRange(range: Range, 
-                                         regex: RegExp, 
-                                         value: string): string {
-        const flag: boolean = range.startContainer !== range.endContainer;
-        let fragment: DocumentFragment = range.cloneContents();
-        let content: string;
-        // 发生了跨DOM的替换 同时处理删除
-        if (flag) {
-            content = LucenceCore.getTextFromDiffNode(fragment).replace(/\n$/, "");
-            LucenceCore.deleteRangeContentsAndEmptyTags(range);
-        } else {
-            let tempDiv: HTMLDivElement = document.createElement("div");
-            tempDiv.appendChild(fragment);
-            content = tempDiv.innerText;
-            range.deleteContents();
-        }
-        // 生成替换后的文本内容
-        return content.replace(regex, value);
     }
 
     /**
@@ -896,6 +922,18 @@ export class LucenceCore {
             child = child.nextSibling;
         }
         return isBlockElement ? text + '\n' : text;
+    }
+
+    /**
+     * 为所有class为".mermaid.mermaid-box"的容器渲染mermaid语法
+     */
+    private static renderMermaid(): void {
+        mermaid.init(
+            undefined,
+            document.querySelectorAll('.mermaid-to-render'))
+            .catch(e => {
+                console.error(e);
+            });
     }
     
 }
