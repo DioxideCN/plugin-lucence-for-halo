@@ -1,5 +1,4 @@
 import type {Editor} from "@toast-ui/editor";
-import type {SelectionPos} from "@toast-ui/editor/types/editor";
 
 /**
  * LineWalker是Lucence Editor内核中处理行数容器的核心类。在早期Lucence Editor对行容器的处理过程非常分散，包括在{@link LucenceCore}中初始化容器、在{@link ContextUtil#Line}中更新容器。这使得行容器的处理逻辑变得复杂而难以维护。

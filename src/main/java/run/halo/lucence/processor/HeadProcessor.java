@@ -19,24 +19,14 @@ import java.util.Map;
 @Component
 public class HeadProcessor implements TemplateHeadProcessor {
 
-    private static final String TEMPLATE_ID_VARIABLE = "_templateId";
-
     @Override
     public Mono<Void> process(ITemplateContext context,
                               IModel model,
                               IElementModelStructureHandler structureHandler) {
         final IModelFactory modelFactory = context.getModelFactory();
-        final String templateId = context.getVariable(TEMPLATE_ID_VARIABLE).toString();
-        System.out.println("===[debug]===");
-        System.out.println(templateId);
-        System.out.println("===[debug]===");
-
-        if ("page".equals(templateId) ||
-            "post".equals(templateId)) {
-            model.add(modelFactory.createText(
-                KatexInjector.get() + MermaidInjector.get()
-            ));
-        }
+        model.add(modelFactory.createText(
+            KatexInjector.get() + MermaidInjector.get()
+        ));
         return Mono.empty();
     }
 

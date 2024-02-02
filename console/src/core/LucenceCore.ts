@@ -388,9 +388,11 @@ export class LucenceCore {
     public toggle: any = {
         // 切换深浅色模式
         theme: (): boolean => {
-            const editorDiv = document.getElementById('toast-editor');
+            const editorDiv: HTMLElement | null = 
+                document.getElementById('toast-editor');
             if (editorDiv) {
-                const newTheme: "light" | "night" = LucenceCore.getTheme() === 'light' ? 'night' : 'light';
+                const newTheme: "light" | "night" = 
+                    LucenceCore.getTheme() === 'light' ? 'night' : 'light';
                 LucenceCore._cache.value.theme = newTheme;
                 localStorage.setItem('editor-theme', newTheme);
                 this.updateToolbarItem(newTheme);
