@@ -1,6 +1,5 @@
 import type {PluginEvent, PluginEventDefinition, PluginEventConverter, PluginHolder} from "@/extension/ArgumentPlugin";
 import type {PluginResolver} from "@/core/PluginResolver";
-import type {AbstractPlugin} from "@/extension/BasePlugin";
 
 type EventStackObject = {
     [K in PluginEvent]: Stack<PluginEventConverter>

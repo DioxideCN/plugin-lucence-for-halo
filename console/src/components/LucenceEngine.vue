@@ -372,7 +372,7 @@ onMounted(async () => {
         const html: string = core.getHTML();
         emit('update:raw',     markdown);
         emit('update:content', html);
-        emit('update',         html);
+        emit('update',         markdown);
     });
 })
 </script>

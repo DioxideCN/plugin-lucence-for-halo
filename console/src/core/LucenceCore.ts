@@ -72,8 +72,6 @@ export class LucenceCore {
     // line walker
     private readonly lineWalker: LineWalker;
 
-    // 文本更新节流器
-    private updateThrottleTimer: number | undefined;
     // 搜索节流器
     private searchThrottleTimer: number | undefined;
 
@@ -286,17 +284,13 @@ export class LucenceCore {
             });
         // 文本内容观察者
         const observer = new MutationObserver((mutationsList: MutationRecord[], observer: MutationObserver): void => {
-            if (this.updateThrottleTimer) {
-                clearTimeout(this.updateThrottleTimer);
-            }
-            this.updateThrottleTimer = window.setTimeout(() => {
-                for (let mutation of mutationsList) {
-                    if (mutation.type === 'childList' || mutation.type === 'characterData') {
-                        this.eventHolder.callSeries("content_change");
-                        break;
-                    }
+            for (let mutation of mutationsList) {
+                if (mutation.type === 'childList' || mutation.type === 'characterData') {
+                    // 调用内容变化的所有事件栈
+                    this.eventHolder.callSeries("content_change");
+                    break;
                 }
-            }, 50);
+            }
         });
         // 开始观察内容变化
         observer.observe(this.area.mdEditor, {
@@ -367,19 +361,14 @@ export class LucenceCore {
      */
     private tryCallContentEvent(rawCount: number, 
                                 nowCount: number): void {
-        if (this.updateThrottleTimer) {
-            clearTimeout(this.updateThrottleTimer);
+        if (rawCount < nowCount) {
+            this.eventHolder.callSeries("content_input");
+        } else if (rawCount > nowCount) {
+            this.eventHolder.callSeries("content_delete");
         }
-        this.updateThrottleTimer = window.setTimeout((): void => {
-            if (rawCount < nowCount) {
-                this.eventHolder.callSeries("content_input");
-            } else if (rawCount > nowCount) {
-                this.eventHolder.callSeries("content_delete");
-            }
-            if (rawCount === nowCount) {
-                this.eventHolder.callSeries("content_select");
-            }
-        }, 50);
+        if (rawCount === nowCount) {
+            this.eventHolder.callSeries("content_select");
+        }
     }
 
     /**
