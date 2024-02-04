@@ -1,22 +1,43 @@
-import type {PluginCommand, PluginHolder, PluginList, PluginToolbar} from "@/extension/ArgumentPlugin";
-import type { AbstractPlugin } from "@/extension/BasePlugin";
+import type {PluginCommand, PluginHolder, PluginList, PluginRenderer, PluginToolbar} from "@/extension/ArgumentPlugin";
+import type {AbstractPlugin } from "@/extension/BasePlugin";
 import {Stack} from "@/core/BasicStructure";
 import type {ToolbarItemOptions} from "@toast-ui/editor/types/ui";
 import type {LucenceCore} from "@/core/LucenceCore";
 import {DefaultPlugin} from "@/plugin/DefaultPlugin";
+import {ThemeGravityDom} from "@/plugin/ThemeGravityDom";
 
 export class PluginResolver {
-    
+
+    private readonly _rawHolder: Map<string, PluginHolder> = new Map();
     private readonly _pluginList: PluginList = new Stack<PluginHolder>();
+    private readonly _rawPluginList: AbstractPlugin[] = [];
     
-    private readonly core: LucenceCore;
+    private _rendererSource: object = {};
     
-    constructor(core: LucenceCore) {
+    private core: LucenceCore | undefined;
+
+    // 自动挂载的前置处理
+    constructor() {
+        // Default Plugin
+        const defaultOne: DefaultPlugin = new DefaultPlugin();
+        // Theme Gravity Dom
+        const themeGravityDomOne = new ThemeGravityDom();
+        // post constructor
+        this.handlePostConstruct(defaultOne, themeGravityDomOne);
+    }
+    
+    private handlePostConstruct(...plugins: AbstractPlugin[]) {
+        for (let plugin of plugins) {
+            this._rawPluginList.push(plugin); // raw plugin push in
+            this.postConstructPlugin(plugin); // construct renderers
+        }
+    }
+    
+    public build(core: LucenceCore) {
         this.core = core;
     }
-
-    // 装配Plugin
-    private load(plugin: AbstractPlugin): void {
+    
+    private postConstructPlugin(plugin: AbstractPlugin): void {
         // detail数据校验
         if (!plugin.detail) {
             throw Error("Plugin doesn't have detail.");
@@ -37,15 +58,39 @@ export class PluginResolver {
         if (!plugin.detail.github || !matchUrl(plugin.detail.github)) {
             throw Error("Plugin must provide a correct github url.");
         }
+        // 剥离Renderer
+        const renderers = plugin.createRenderer();
         const holder: PluginHolder = {
             key: plugin.detail.name,
             detail: plugin.detail,
             register: {
                 toolbar: [],
+                renderers: [],
                 command: [],
                 event: [],
             }
         };
+        if (renderers !== null) {
+            const _renderers = this.extractRenderers(renderers);
+            // 合并对象
+            Object.assign(this._rendererSource, this._rendererSource, _renderers);
+            // 注入注册表
+            for (let index = 0; index < renderers.length; index++) {
+                holder.register.renderers.push({
+                    key: `${plugin.detail.name}.renderer.${Object.keys(renderers[index])[1]}`,
+                    desc: renderers[index].desc,
+                });
+            }
+        }
+        this._rawHolder.set(plugin.detail.name, holder);
+    }
+
+    // 装配Plugin
+    private load(plugin: AbstractPlugin): void {
+        this.checkCore();
+        // build plugin
+        plugin.build(this.core!);
+        const holder: PluginHolder = this._rawHolder.get(plugin.detail.name)!;
         // 是否已经存在相同name和display的插件，如果是则不load这个插件并throw异常中断程序
         for (let elem of this._pluginList.elems()) {
             if (elem.key === plugin.detail.name) {
@@ -59,12 +104,12 @@ export class PluginResolver {
         if (toolbar) {
             const items: ToolbarItemOptions[] = toolbar.items;
             for (let i: number = 0; i < items.length; i++) {
-                this.core.editor.insertToolbarItem({
+                this.core!.editor.insertToolbarItem({
                     groupIndex: 0,
                     itemIndex: i,
                 }, items[i]);
                 holder.register.toolbar.push({
-                    key: `${plugin.detail.name}.tool.${i + 1}`,
+                    key: `${plugin.detail.name}.tool.${items[i].name}`,
                     name: `${items[i].name}`,
                     tooltip: `${items[i].tooltip}`,
                 });
@@ -73,7 +118,7 @@ export class PluginResolver {
         // 注册commands
         if (commands) {
             for (let i = 0; i < commands.length; i++) {
-                this.core.editor.addCommand(
+                this.core!.editor.addCommand(
                     'markdown',
                     commands[i].name,
                     commands[i].command,
@@ -86,6 +131,7 @@ export class PluginResolver {
             }
         }
         // 将构建完成的插件压栈
+        this._rawHolder.delete(plugin.detail.name);
         this._pluginList.push(holder);
         plugin.onEnable();
     }
@@ -98,12 +144,13 @@ export class PluginResolver {
     
     // 自动挂载
     public autoload(): void {
-        // 硬加载基本插件
-        const defaultOne: DefaultPlugin = new DefaultPlugin(this.core);
-        this.load(defaultOne);
+        this.checkCore();
+        for (let plugin of this._rawPluginList) {
+            // 这时候的resolver必须经过了build
+            this.load(plugin);
+        }
         // 扫描
         this.scanAll();
-        
     }
     
     // 扫描所有plugin并通过load挂载
@@ -112,10 +159,36 @@ export class PluginResolver {
     }
 
     /**
+     * 将插件实例中的渲染器全部分离到新的对象中
+     */
+    private extractRenderers(renderers: PluginRenderer) {
+        return renderers.reduce((result, obj) => {
+            // @ts-ignore
+            const [key, value] = Object.entries(obj)[1];
+            // @ts-ignore
+            result[key] = value;
+            return result;
+        }, {});
+    }
+    
+    private checkCore(): void {
+        if (this.core === undefined) {
+            throw Error("Core in plugin resolver shouldn't be undefined!");
+        }
+    }
+
+    /**
      * 获取plugin列表
      */
     public get pluginList(): PluginHolder[] {
         return this._pluginList.elems();
+    }
+
+    /**
+     * 获取renderer列表
+     */
+    public get rendererSource(): object {
+        return this._rendererSource;
     }
     
 }

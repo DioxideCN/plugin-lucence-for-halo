@@ -1,6 +1,9 @@
 import type {ToolbarItemOptions} from "@toast-ui/editor/types/ui";
 import type {CommandFn} from "@toast-ui/editor/types/plugin";
 import type {Stack} from "@/core/BasicStructure";
+import type {MdNode, PluginInfo} from "@toast-ui/editor";
+import type {HTMLConvertor} from "@toast-ui/editor/types/toastmark";
+import type {CustomHTMLRenderer} from "@toast-ui/editor/types/editor";
 
 export type PluginToolbar = {
     append: 'start' | 'end',
@@ -11,6 +14,13 @@ export type PluginCommand = {
     name: string,
     command: CommandFn,
 }
+
+type RendererFunction = (node: MdNode) => any;
+interface RendererItem {
+    desc: string,
+    [key: string]: RendererFunction | string,
+};
+export type PluginRenderer = RendererItem[];
 
 /**
  * 暴露给第三方开发者的插件信息定义类型
@@ -35,6 +45,10 @@ export type PluginHolder = {
             key: string,
             name: string,
             tooltip: string,
+        }[],
+        renderers: {
+            key: string,
+            desc: string,
         }[],
         command: {
             key: string,

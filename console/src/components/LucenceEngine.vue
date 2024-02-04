@@ -238,7 +238,7 @@
                                     {{ core.plugins.value[pluginStore.activeOn].detail.description }}
                                 </template>
                                 <template v-else-if="pluginStore.actionOn === 1">
-                                    仍处于开发状态，最新状态请关注GitHub
+                                    配置仍处于开发状态，最新状态请关注GitHub
                                 </template>
                                 <template v-else-if="pluginStore.actionOn === 2">
                                     <ul class="ext-list--body">
@@ -252,9 +252,9 @@
                                                    :style="'display:'+(pluginStore.actionOpen[0]?'':'none')">
                                                 <thead>
                                                     <tr>
-                                                        <th>扩展Key</th>
-                                                        <th>工具ID</th>
-                                                        <th>工具名称</th>
+                                                        <th>ID</th>
+                                                        <th>名称</th>
+                                                        <th>提示</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -269,15 +269,37 @@
                                         <li class="ext-list--column"
                                             @click="switchActionOpen(1)">
                                             <div class="ext-list--title">
-                                                <i class="fa-solid" :class="pluginStore.actionOpen[1]?'fa-caret-down':'fa-caret-right'"></i>命令（共{{ core.plugins.value[pluginStore.activeOn].register.command.length }}项）
+                                                <i class="fa-solid" :class="pluginStore.actionOpen[1]?'fa-caret-down':'fa-caret-right'"></i>渲染器（共{{ core.plugins.value[pluginStore.activeOn].register.renderers.length }}项）
                                             </div>
-                                            <table @click.stop 
+                                            <table @click.stop
                                                    class="ext-list--child_list"
                                                    :style="'display:'+(pluginStore.actionOpen[1]?'':'none')">
                                                 <thead>
                                                     <tr>
-                                                        <th>扩展Key</th>
-                                                        <th>命令名称</th>
+                                                        <th>ID</th>
+                                                        <th>描述</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr v-for="(item, index) in core.plugins.value[pluginStore.activeOn].register.renderers" :key="index">
+                                                        <td><code>{{ item.key }}</code></td>
+                                                        <td>{{ item.desc }}</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </li>
+                                        <li class="ext-list--column"
+                                            @click="switchActionOpen(2)">
+                                            <div class="ext-list--title">
+                                                <i class="fa-solid" :class="pluginStore.actionOpen[2]?'fa-caret-down':'fa-caret-right'"></i>命令（共{{ core.plugins.value[pluginStore.activeOn].register.command.length }}项）
+                                            </div>
+                                            <table @click.stop 
+                                                   class="ext-list--child_list"
+                                                   :style="'display:'+(pluginStore.actionOpen[2]?'':'none')">
+                                                <thead>
+                                                    <tr>
+                                                        <th>ID</th>
+                                                        <th>名称</th>
                                                         <th>返回类型</th>
                                                     </tr>
                                                 </thead>
@@ -291,16 +313,16 @@
                                             </table>
                                         </li>
                                         <li class="ext-list--column"
-                                            @click="switchActionOpen(2)">
+                                            @click="switchActionOpen(3)">
                                             <div class="ext-list--title">
-                                                <i class="fa-solid" :class="pluginStore.actionOpen[2]?'fa-caret-down':'fa-caret-right'"></i>事件（共{{ core.plugins.value[pluginStore.activeOn].register.event.length }}项）
+                                                <i class="fa-solid" :class="pluginStore.actionOpen[3]?'fa-caret-down':'fa-caret-right'"></i>事件（共{{ core.plugins.value[pluginStore.activeOn].register.event.length }}项）
                                             </div>
                                             <table @click.stop 
                                                    class="ext-list--child_list"
-                                                   :style="'display:'+(pluginStore.actionOpen[2]?'':'none')">
+                                                   :style="'display:'+(pluginStore.actionOpen[3]?'':'none')">
                                                 <thead>
                                                     <tr>
-                                                        <th>扩展Key</th>
+                                                        <th>ID</th>
                                                         <th>监听类型</th>
                                                         <th>描述</th>
                                                     </tr>
@@ -350,7 +372,7 @@ let core: LucenceCore;
 const pluginStore = ref({
     activeOn: 0,
     actionOn: 0,
-    actionOpen: [true, true, true]
+    actionOpen: [true, true, true, true]
 });
 function closeExtension(): void {
     core.toggle.plugin.close();

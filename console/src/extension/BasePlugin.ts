@@ -1,13 +1,19 @@
-import type {PluginCommand, PluginDetail, PluginToolbar} from "@/extension/ArgumentPlugin";
+import type {PluginCommand, PluginDetail, PluginRenderer, PluginToolbar} from "@/extension/ArgumentPlugin";
 import type {LucenceCore} from "@/core/LucenceCore";
+import type {PluginContext} from "@toast-ui/editor";
+import type {PluginOptions} from "@toast-ui/editor-plugin-code-syntax-highlight";
 
 export abstract class AbstractPlugin {
     
-    protected readonly core: LucenceCore;
+    protected core: LucenceCore | undefined;
     public abstract readonly detail: PluginDetail;
 
-    constructor(core: LucenceCore) {
+    constructor() {
+    }
+    
+    build(core: LucenceCore): AbstractPlugin {
         this.core = core;
+        return this;
     }
 
     /**
@@ -37,6 +43,14 @@ export abstract class AbstractPlugin {
      * 必要时三方开发者需要对基类进行覆写
      */
     createCommands(): PluginCommand[] | null {
+        return null;
+    };
+
+    /**
+     * 创建：前置类型的渲染器构造方法
+     * 必要时三方开发者需要对基类进行覆写
+     */
+    createRenderer(): PluginRenderer | null {
         return null;
     };
     

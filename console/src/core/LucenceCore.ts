@@ -1,11 +1,9 @@
-// @ts-ignore
-import katex from 'katex';
 import mermaid from 'mermaid';
 import hljs from 'highlight.js';
 
 import type {Ref} from "vue";
 import {ref} from "vue";
-import {Editor} from "@toast-ui/editor";
+import {Editor, type MdNode} from "@toast-ui/editor";
 import {ContextUtil} from "@/util/ContextUtil";
 import {SearchUtil} from "@/util/SearchUtil";
 import type {AreaType, CacheType} from "@/core/TypeDefinition";
@@ -15,6 +13,7 @@ import {PluginEventHolder} from "@/core/BasicStructure";
 import type {AbstractPlugin} from "@/extension/BasePlugin";
 import {PluginResolver} from "@/core/PluginResolver";
 import {LineWalker} from "@/kernel/LineWalker";
+import {PopupBuilder} from "@/util/PopupBuilder";
 
 export class LucenceCore {
     
@@ -66,8 +65,8 @@ export class LucenceCore {
     // event holder
     private readonly eventHolder: PluginEventHolder;
     
-    // plugin resolver
-    private readonly resolver: PluginResolver;
+    // plugin resolver --- 前置构造先完成renderer注入
+    private readonly resolver: PluginResolver = new PluginResolver();
     
     // line walker
     private readonly lineWalker: LineWalker;
@@ -92,109 +91,16 @@ export class LucenceCore {
             placeholder: '请输入内容...',
             hideModeSwitch: true,
             previewHighlight: false,
-            toolbarItems: [[]],
+            toolbarItems: [[
+                {
+                    name: 'tool-plus',
+                    tooltip: '插入',
+                    className: 'fa-solid fa-circle-plus editor-insert',
+                }
+            ]],
             initialValue: rawContent,
             // 定义Markdown到HTML的渲染规则
-            customHTMLRenderer: {
-                codeBlock(node: any): any {
-                    if (node.info === "mermaid") {
-                        return [
-                            { type: 'openTag', tagName: 'div', classNames: [node.info, 'mermaid-box', 'show-mermaid'] },
-                                { type: 'openTag', tagName: 'div', classNames: [node.info, 'mermaid-to-render'] },
-                                    { type: 'text', content: node.literal! },
-                                { type: 'closeTag', tagName: 'div' },
-                                { type: 'openTag', tagName: 'div', classNames: [node.info, 'hide-mermaid'] },
-                                    { type: 'text', content: node.literal! },
-                                { type: 'closeTag', tagName: 'div' },
-                            { type: 'closeTag', tagName: 'div' },
-                        ];
-                    }
-                    return [
-                        { type: 'openTag', tagName: 'pre', classNames: ['language-' + node.info] },
-                            { type: 'openTag', tagName: 'code', classNames: ['hljs', 'language-' + node.info] },
-                                { type: 'text', content: node.literal! },
-                            { type: 'closeTag', tagName: 'code' },
-                        { type: 'closeTag', tagName: 'pre' },
-                    ];
-                },
-                text(node: any): any {
-                    // 渲染行内latex
-                    const content: string = node.literal;
-                    const regex: RegExp = /\$(.+?)\$/g;
-                    let result: any;
-                    let lastIndex: number = 0;
-                    const tokens: any = [];
-                    while (result = regex.exec(content)) {
-                        const [match, innerContent] = result;
-                        if (lastIndex !== result.index) {
-                            tokens.push({
-                                type: 'text',
-                                content: content.slice(lastIndex, result.index),
-                            });
-                        }
-                        const span = document.createElement('span');
-                        try {
-                            katex.render(innerContent, span);
-                            // 检查渲染后的内容是否为空
-                            if (span.innerHTML.trim() !== "") {
-                                tokens.push({
-                                    type: 'html',
-                                    content: span.outerHTML,
-                                });
-                            } else {
-                                tokens.push({
-                                    type: 'text',
-                                    content: match,
-                                });
-                            }
-                        } catch (e) {
-                            // 如果渲染失败，则回退到原始文本
-                            tokens.push({
-                                type: 'text',
-                                content: match,
-                            });
-                        }
-                        lastIndex = regex.lastIndex;
-                    }
-                    if (lastIndex < content.length) {
-                        tokens.push({
-                            type: 'text',
-                            content: content.slice(lastIndex),
-                        });
-                    }
-                    return tokens;
-                },
-                latex(node: any): any {
-                    // 渲染块状latex
-                    const raw: string = node.literal;
-                    const span: HTMLSpanElement = document.createElement('span');
-                    const tokens: any = [
-                        { 
-                            type: 'openTag', 
-                            tagName: 'p', 
-                            classNames: ['lucence-block-latex'], 
-                            outerNewLine: true 
-                        }
-                    ];
-                    try {
-                        katex.render(raw, span);
-                        tokens.push({
-                            type: 'html',
-                            content: span.outerHTML,
-                        });
-                    } catch (e) {
-                        span.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Wrong Latex syntax!'
-                        span.style.color = 'rgb(228, 105, 98)';
-                        span.style.fontStyle = 'italic';
-                        tokens.push({
-                            type: 'html',
-                            content: span.outerHTML,
-                        });
-                    }
-                    tokens.push({ type: 'closeTag', tagName: 'p', outerNewLine: true })
-                    return tokens;
-                },
-            },
+            customHTMLRenderer: this.resolver.rendererSource,
         });
         this.area = {
             // 预览区
@@ -206,7 +112,7 @@ export class LucenceCore {
             // markdown编辑器
             mdEditor: document.getElementsByClassName('toastui-editor md-mode')[0].getElementsByClassName('ProseMirror')[0]! as HTMLElement,
         }
-        this.resolver = new PluginResolver(this);
+        this.resolver.build(this); // 装配core到resolver形成完整的resolver
         this.eventHolder = new PluginEventHolder(this.resolver);
         // 初始化行数容器对象
         this.lineWalker = LineWalker.init(this.instance);
@@ -603,10 +509,10 @@ export class LucenceCore {
      * 返回编辑器渲染后的HTML内容
      */
     public getHTML(): string {
-        let newHtml = '';
-        const childNodes = 
+        let newHtml: string = '';
+        const childNodes: NodeListOf<ChildNode> = 
             document.querySelectorAll(".toastui-editor-md-preview .toastui-editor-contents")[0].childNodes;
-        for (let i = 0; i < childNodes.length; i++) {
+        for (let i: number = 0; i < childNodes.length; i++) {
             const node: ChildNode = childNodes[i];
             if (node.nodeType === Node.ELEMENT_NODE) {
                 let clone: Element = node.cloneNode(true) as Element;
