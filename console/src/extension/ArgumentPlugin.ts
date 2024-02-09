@@ -2,8 +2,9 @@ import type {ToolbarItemOptions} from "@toast-ui/editor/types/ui";
 import type {CommandFn} from "@toast-ui/editor/types/plugin";
 import type {Stack} from "@/core/BasicStructure";
 import type {MdNode, PluginInfo} from "@toast-ui/editor";
-import type {HTMLConvertor} from "@toast-ui/editor/types/toastmark";
+import type {HTMLConvertor, HTMLToken} from "@toast-ui/editor/types/toastmark";
 import type {CustomHTMLRenderer} from "@toast-ui/editor/types/editor";
+import type {RendererContext} from "@/core/PluginResolver";
 
 export type PluginToolbar = {
     append: 'start' | 'end',
@@ -14,13 +15,6 @@ export type PluginCommand = {
     name: string,
     command: CommandFn,
 }
-
-type RendererFunction = (node: MdNode) => any;
-interface RendererItem {
-    desc: string,
-    [key: string]: RendererFunction | string,
-};
-export type PluginRenderer = RendererItem[];
 
 /**
  * 暴露给第三方开发者的插件信息定义类型
@@ -48,7 +42,9 @@ export type PluginHolder = {
         }[],
         renderers: {
             key: string,
+            name: string,
             desc: string,
+            components: PluginComponents,
         }[],
         command: {
             key: string,
@@ -98,3 +94,22 @@ export type PluginEventConverter = {
     source: string,
     callback: EventHandler,
 }
+
+// ------ 插件组件类型
+
+export interface PluginRenderer {
+    desc: string,
+    name: string,
+    components: PluginComponents,
+}
+export type PluginRenderers = PluginRenderer[];
+
+export type PluginComponent = {
+    desc?: string,    // 描述
+    showInComponents?: boolean | undefined, // 是否在组件中启用自动插入，默认为true
+    allowContent?: boolean | undefined;
+    allowContentHTML?: boolean | undefined;
+    attributes?: Record<string, any> | undefined,
+    render: (context: RendererContext) => DocumentFragment;
+};
+export type PluginComponents = Record<string, PluginComponent>;

@@ -1,7 +1,5 @@
-import type {PluginCommand, PluginDetail, PluginRenderer, PluginToolbar} from "@/extension/ArgumentPlugin";
+import type {PluginCommand, PluginDetail, PluginRenderers, PluginToolbar} from "@/extension/ArgumentPlugin";
 import type {LucenceCore} from "@/core/LucenceCore";
-import type {PluginContext} from "@toast-ui/editor";
-import type {PluginOptions} from "@toast-ui/editor-plugin-code-syntax-highlight";
 
 export abstract class AbstractPlugin {
     
@@ -50,7 +48,7 @@ export abstract class AbstractPlugin {
      * 创建：前置类型的渲染器构造方法
      * 必要时三方开发者需要对基类进行覆写
      */
-    createRenderer(): PluginRenderer | null {
+    createRenderer(): PluginRenderers | null {
         return null;
     };
     

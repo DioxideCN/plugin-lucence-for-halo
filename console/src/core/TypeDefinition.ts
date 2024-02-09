@@ -28,11 +28,16 @@ export type CacheType = {
         focus: {
             row: number,                      // 聚焦的行
             col: number,                      // 聚焦的列
-        }
+        },
     },
     theme: 'light' | 'night',                 // 深浅色模式
     plugin: {
+        loaded: boolean,                      // 挂载状态
         enable: boolean,                      // 开启插件菜单
+    },
+    components: {
+        loaded: boolean,                      // 挂载状态
+        enable: boolean,                  // 开启组件库
     },
 };
 

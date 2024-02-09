@@ -3,17 +3,24 @@ import hljs from 'highlight.js';
 
 import type {Ref} from "vue";
 import {ref} from "vue";
-import {Editor, type MdNode} from "@toast-ui/editor";
+import {Editor} from "@toast-ui/editor";
 import {ContextUtil} from "@/util/ContextUtil";
 import {SearchUtil} from "@/util/SearchUtil";
 import type {AreaType, CacheType} from "@/core/TypeDefinition";
 import type {SelectionPos} from "@toast-ui/editor/types/editor";
-import type {EventHandler, PluginEvent, PluginHolder} from "@/extension/ArgumentPlugin";
+import type {
+    EventHandler,
+    PluginEvent,
+    PluginHolder,
+    PluginRenderer,
+    PluginComponent
+} from "@/extension/ArgumentPlugin";
 import {PluginEventHolder} from "@/core/BasicStructure";
 import type {AbstractPlugin} from "@/extension/BasePlugin";
-import {PluginResolver} from "@/core/PluginResolver";
+import {PluginResolver, RendererContext} from "@/core/PluginResolver";
 import {LineWalker} from "@/kernel/LineWalker";
-import {PopupBuilder} from "@/util/PopupBuilder";
+import type {LucencePlugin} from "@/extension/ExtentedPluginType";
+import axios, {type AxiosInstance} from "axios";
 
 export class LucenceCore {
     
@@ -48,28 +55,33 @@ export class LucenceCore {
             focus: {
                 row: 1,                      // 聚焦的行
                 col: 1,                      // 聚焦的列
-            }
+            },
         },
         theme: LucenceCore.getTheme(),       // 深浅色模式
         plugin: {
+            loaded: false,                   // 挂载状态
             enable: false,                   // 开启插件菜单
+        },
+        components: {
+            loaded: false,                   // 挂载状态
+            enable: false,                   // 开启组件库
         },
     });
 
     // define editor instance
-    private readonly instance: Editor;
+    private instance: Editor | undefined;
     
     // area 依赖于 afterMounted
-    private area: AreaType;
+    private area: AreaType | undefined;
 
     // event holder
-    private readonly eventHolder: PluginEventHolder;
+    private eventHolder: PluginEventHolder | undefined;
     
     // plugin resolver --- 前置构造先完成renderer注入
-    private readonly resolver: PluginResolver = new PluginResolver();
+    private resolver: PluginResolver = new PluginResolver();
     
     // line walker
-    private readonly lineWalker: LineWalker;
+    private lineWalker: LineWalker | undefined;
 
     // 搜索节流器
     private searchThrottleTimer: number | undefined;
@@ -78,8 +90,9 @@ export class LucenceCore {
      * 构造器内完成对ToastUIEditor的定义
      * 这包括toolbar、自定义的渲染规则和命令注册
      */
-    constructor(rawContent: string) {
-        const editorOuter: HTMLElement = 
+    public async postConstructor(rawContent: string) {
+        await this.resolver.postConstructor();
+        const editorOuter: HTMLElement =
             document.querySelector('#toast-editor') as HTMLElement;
         if (!editorOuter) {
             throw new Error('Cannot find element from id \'#toast-editor\'!');
@@ -91,13 +104,7 @@ export class LucenceCore {
             placeholder: '请输入内容...',
             hideModeSwitch: true,
             previewHighlight: false,
-            toolbarItems: [[
-                {
-                    name: 'tool-plus',
-                    tooltip: '插入',
-                    className: 'fa-solid fa-circle-plus editor-insert',
-                }
-            ]],
+            toolbarItems: [[]],
             initialValue: rawContent,
             // 定义Markdown到HTML的渲染规则
             customHTMLRenderer: this.resolver.rendererSource,
@@ -125,14 +132,29 @@ export class LucenceCore {
      */
     public build(emitter: EventHandler): LucenceCore {
         // 定义编辑器实例的command
-        this.instance.addCommand(
+        this.instance!.addCommand(
             'markdown', 
             'switchTheme', 
             () => this.toggle.theme());
+        this.instance!.addCommand(
+            'markdown',
+            'switchShowComponents',
+            () => this.toggle.components());
         // Plugin 自动挂载所有插件
         this.resolver.autoload();
+        // 嵌入添加渲染器按钮
+        this.instance!.insertToolbarItem({
+            groupIndex: 0,
+            itemIndex: 0,
+        }, {
+            name: 'tool-components',
+            tooltip: '组件',
+            command: 'switchShowComponents',
+            className: 'fa-solid fa-puzzle-piece editor-insert',
+        });
         // 嵌入主题切换按钮
-        this.updateToolbarItem(LucenceCore.getTheme());
+        const theme: 'light' | 'night' = LucenceCore.getTheme();
+        this.updateToolbarItem(theme);
         const that = this;
         // 重写Ctrl+F方法来调用doSearch()
         document.addEventListener('keydown', function(event: KeyboardEvent): void {
@@ -150,18 +172,18 @@ export class LucenceCore {
             }
         });
         // 事件更新驱动
-        this.instance.on('caretChange', (): void => {
+        this.instance!.on('caretChange', (): void => {
             this.useUpdate();
         });
-        this.instance.on('updatePreview', (): void => { 
+        this.instance!.on('updatePreview', (): void => { 
             LucenceCore.renderCodeBlock(); 
         });
-        this.instance.on('afterPreviewRender', (): void => {
+        this.instance!.on('afterPreviewRender', (): void => {
             LucenceCore.renderMermaid();
         });
         // 预热
         const mdEditor: Element = 
-            this.area.editor.getElementsByClassName('ProseMirror')[0];
+            this.area!.editor.getElementsByClassName('ProseMirror')[0];
         this.useUpdate();
         ContextUtil.onResize(
             mdEditor, 
@@ -171,14 +193,14 @@ export class LucenceCore {
         this.syncScroll();
         LucenceCore.renderMermaid();
         // 事件提交器
-        this.eventHolder.register(
+        this.eventHolder!.register(
             "default_extension",
             {
                 type: "content_change",
                 desc: "内容自动保存",
                 callback: emitter,
             });
-        this.eventHolder.register(
+        this.eventHolder!.register(
             "default_extension",
             {
                 type: "content_change",
@@ -193,20 +215,30 @@ export class LucenceCore {
             for (let mutation of mutationsList) {
                 if (mutation.type === 'childList' || mutation.type === 'characterData') {
                     // 调用内容变化的所有事件栈
-                    this.eventHolder.callSeries("content_change");
+                    this.eventHolder!.callSeries("content_change");
                     break;
                 }
             }
         });
         // 开始观察内容变化
-        observer.observe(this.area.mdEditor, {
+        observer.observe(this.area!.mdEditor, {
             childList: true,
             attributes: true,
             characterData: true,
             subtree: true,
         });
+        // 完成构造
+        this.postConstruct();
         // 在构建成功后将instance实例暴露到全局
         return this;
+    }
+
+    /**
+     * 完成构造
+     */
+    private postConstruct() {
+        LucenceCore._cache.value.plugin.loaded = true;
+        LucenceCore._cache.value.components.loaded = true;
     }
 
     /**
@@ -221,14 +253,14 @@ export class LucenceCore {
             isProgrammaticScroll = true;
             target.scrollTop = newScrollTop;
         }
-        this.area.editor.addEventListener('scroll', () => {
+        this.area!.editor.addEventListener('scroll', () => {
             if (isProgrammaticScroll) return;
-            syncScroll(this.area.editor as HTMLDivElement, previewElem);
+            syncScroll(this.area!.editor as HTMLDivElement, previewElem);
             setTimeout(() => { isProgrammaticScroll = false; }, 0);
         });
         previewElem.addEventListener('scroll', () => {
             if (isProgrammaticScroll) return;
-            syncScroll(previewElem, this.area.editor as HTMLDivElement);
+            syncScroll(previewElem, this.area!.editor as HTMLDivElement);
             setTimeout(() => { isProgrammaticScroll = false; }, 0);
         });
     }
@@ -237,7 +269,7 @@ export class LucenceCore {
      * 更新所有缓存
      */
     private useUpdate(): void {
-        const mdContent: string = this.instance.getMarkdown();
+        const mdContent: string = this.instance!.getMarkdown();
         // 更新统计
         const { _wordCount, _characterCount } = 
             ContextUtil.countWord(mdContent);
@@ -245,7 +277,7 @@ export class LucenceCore {
         this.tryCallContentEvent(
             LucenceCore._cache.value.feature.count.characters,
             _characterCount);
-        const {row, col, characters}: any = this.lineWalker.getFocusInfo();
+        const {row, col, characters}: any = this.lineWalker!.getFocusInfo();
         // 更新统计的字数、词数、选中数、聚焦行、聚焦列
         LucenceCore._cache.value.feature.count = {
             words: _wordCount,
@@ -268,12 +300,12 @@ export class LucenceCore {
     private tryCallContentEvent(rawCount: number, 
                                 nowCount: number): void {
         if (rawCount < nowCount) {
-            this.eventHolder.callSeries("content_input");
+            this.eventHolder!.callSeries("content_input");
         } else if (rawCount > nowCount) {
-            this.eventHolder.callSeries("content_delete");
+            this.eventHolder!.callSeries("content_delete");
         }
         if (rawCount === nowCount) {
-            this.eventHolder.callSeries("content_select");
+            this.eventHolder!.callSeries("content_select");
         }
     }
 
@@ -292,10 +324,16 @@ export class LucenceCore {
                 localStorage.setItem('editor-theme', newTheme);
                 this.updateToolbarItem(newTheme);
                 // 通知主题变更观察者
-                this.eventHolder.callSeries("theme_change");
+                this.eventHolder!.callSeries("theme_change");
                 return true;
             }
             return false;
+        },
+        // 切换组件库是否打开
+        components: (): boolean => {
+            LucenceCore._cache.value.components.enable = 
+                !LucenceCore._cache.value.components.enable;
+            return true;
         },
         // 切换预览模式
         preview: (): void => {
@@ -303,19 +341,19 @@ export class LucenceCore {
                 !LucenceCore._cache.value.feature.preview;
             const displayWhat: string =
                 LucenceCore._cache.value.feature.preview ? '' : 'none';
-            this.area.preview.style.display = displayWhat;
-            this.area.split.style.display = displayWhat;
-            this.area.editor.style.width =
+            this.area!.preview.style.display = displayWhat;
+            this.area!.split.style.display = displayWhat;
+            this.area!.editor.style.width =
                 LucenceCore._cache.value.feature.preview ? '50%' : '100%';
             // 通知预览变更观察者
-            this.eventHolder.callSeries("switch_preview");
+            this.eventHolder!.callSeries("switch_preview");
         },
         // 切换自动保存模式
         autoSave: (): void => {
             LucenceCore._cache.value.feature.autoSave = 
                 !LucenceCore._cache.value.feature.autoSave;
             // 通知自动保存变更观察者
-            this.eventHolder.callSeries("switch_autosave");
+            this.eventHolder!.callSeries("switch_autosave");
         },
         // 切换是否打开查询框
         search: (): void => {
@@ -323,7 +361,7 @@ export class LucenceCore {
                 !LucenceCore._cache.value.feature.search.enable;
             this.doSearch();
             // 通知搜索启用变更观察者
-            this.eventHolder.callSeries("switch_search");
+            this.eventHolder!.callSeries("switch_search");
             // 关闭替换框
             if (!LucenceCore._cache.value.feature.search.enable) {
                 LucenceCore._cache.value.feature.search.replace = false;
@@ -355,11 +393,37 @@ export class LucenceCore {
         plugin: {
             open: (): void => {
                 LucenceCore._cache.value.plugin.enable = true;
+                if (!LucenceCore.buildDraggableOnce) {
+                    LucenceCore.buildDraggable();
+                }
             },
             close: (): void => {
                 LucenceCore._cache.value.plugin.enable = false;
             }
         },
+    }
+    
+    private static buildDraggableOnce: boolean = false;
+    private static buildDraggable() {
+        const draggableInstall = document.getElementById('draggable-install')!;
+        // 拖拽上传
+        draggableInstall.addEventListener("dragenter", handleEvent);
+        draggableInstall.addEventListener("dragover", handleEvent);
+        draggableInstall.addEventListener("drop", handleEvent);
+        draggableInstall.addEventListener("dragleave", handleEvent);
+        function handleEvent(event: any) {
+            event.preventDefault();
+            if (event.type === 'drop') {
+                draggableInstall.classList.remove('draggable');
+                if (event.dataTransfer.files.length === 0) return;
+                const file = event.dataTransfer.files[0];
+                LucenceCore.uploadPlugin(file);
+            } else if (event.type === 'dragleave') {
+                draggableInstall.classList.remove('draggable');
+            } else {
+                draggableInstall.classList.add('draggable');
+            }
+        }
     }
 
     private isReplacing: boolean = false;
@@ -408,7 +472,7 @@ export class LucenceCore {
             const range: Range | null = this.locateSearchResultAt(true);
             this.replaceRangeContent(range, regex, value);
         }
-        this.eventHolder.callSeries("content_change");
+        this.eventHolder!.callSeries("content_change");
     }
     
     private replaceRangeContent(range: Range | null, 
@@ -481,7 +545,7 @@ export class LucenceCore {
             if (!LucenceCore._cache.value.feature.search.condition.regular) {
                 // 纯文本内容查询
                 const { total, markList }: any = SearchUtil.text(
-                    this.instance.getMarkdown(),
+                    this.instance!.getMarkdown(),
                     value,
                     LucenceCore._cache.value.feature.search.condition.capitalization);
                 SearchUtil.updateHighlight(
@@ -492,7 +556,7 @@ export class LucenceCore {
                     value);
             } else {
                 const { total, markList }: any = SearchUtil.regex(
-                    this.instance.getMarkdown(),
+                    this.instance!.getMarkdown(),
                     value,
                     LucenceCore._cache.value.feature.search.condition.capitalization);
                 SearchUtil.updateHighlight(
@@ -536,7 +600,7 @@ export class LucenceCore {
      * 返回编辑器的原始的Markdown内容
      */
     public getMarkdown(): string {
-        return this.instance.getMarkdown();
+        return this.instance!.getMarkdown();
     }
 
     /**
@@ -549,19 +613,19 @@ export class LucenceCore {
         const { awaitArr, selectIndex } = result;
         LucenceCore._cache.value.feature.search.result.hoverOn = selectIndex;
         // 处理跟随滚动
-        const halfHeight: number = this.area.editor.clientHeight / 2;
-        const maxScroll: number = this.area.editor.scrollHeight - this.area.editor.clientHeight;
+        const halfHeight: number = this.area!.editor.clientHeight / 2;
+        const maxScroll: number = this.area!.editor.scrollHeight - this.area!.editor.clientHeight;
         const topDistance: number = parseInt((document.getElementById("amber-highlight--group")!.childNodes[selectIndex - 1] as HTMLElement).style.top);
         const newScrollTop: number = topDistance - halfHeight;
         if (newScrollTop < 0) {
             // 不在半屏以内
-            this.area.editor.scrollTop = 0;
+            this.area!.editor.scrollTop = 0;
         } else if (newScrollTop > maxScroll) {
             // 超过最大滚动
-            this.area.editor.scrollTop = maxScroll;
+            this.area!.editor.scrollTop = maxScroll;
         } else if (newScrollTop >= 0 && newScrollTop <= maxScroll) {
             // 合法的滚动范围内
-            this.area.editor.scrollTop = newScrollTop;
+            this.area!.editor.scrollTop = newScrollTop;
         }
         return this.highlightResult(awaitArr);
     }
@@ -607,7 +671,7 @@ export class LucenceCore {
         let awaitArr: number[] = [], 
             selectedIndex: number = isDown ? length - 1 : 0;
         for (let index: number = 0; index < length; index++) {
-            const selection: SelectionPos = this.instance.getSelection(), 
+            const selection: SelectionPos = this.instance!.getSelection(), 
                   searchLength: number = 
                       LucenceCore._cache.value.feature.search.condition.regular ? 
                           (LucenceCore._cache.value.feature.search.result.list[index] as number[])[3] - (LucenceCore._cache.value.feature.search.result.list[index] as number[])[1] :
@@ -676,8 +740,8 @@ export class LucenceCore {
      * @param theme 主题色，一般通过{@link #getTheme()}方法来获取
      */
     private updateToolbarItem(theme: string): void {
-        this.instance.removeToolbarItem(`tool-theme-${theme === 'light' ? 'moon' : 'day'}`);
-        this.instance.insertToolbarItem({ groupIndex: 0, itemIndex: 0 }, {
+        this.instance!.removeToolbarItem(`tool-theme-${theme === 'light' ? 'moon' : 'day'}`);
+        this.instance!.insertToolbarItem({ groupIndex: 0, itemIndex: 0 }, {
             name: `tool-theme-${theme === 'light' ? 'day' : 'moon'}`,
             tooltip: `切换至${theme === 'light' ? '夜间' : '白天'}`,
             command: 'switchTheme',
@@ -693,7 +757,7 @@ export class LucenceCore {
               desc: string,
               callback: EventHandler): void {
         // 事件类型和回调器压栈
-        this.eventHolder.register(
+        this.eventHolder!.register(
             plugin.detail.name,
             {
                 type: event,
@@ -702,13 +766,51 @@ export class LucenceCore {
             });
     }
     
+    public insertComponent(renderer: string, data: Record<string, string>) {
+        const [start]: number[][] = this.instance!.getSelection() as [number[], number[]];
+        // @ts-ignore
+        const mapped = Object.entries(data)
+            .map(([key, value]: string[]): string => {
+                if (key === 'slots') return '';
+                if (key === 'content') return value + '\n';
+                return `${key}: ${value}\n`;
+            }).join('');
+        const result = 
+            `${start[1] === 1 ? '' : '\n'}$$${renderer}\n${mapped}$$`;
+        this.instance!.replaceSelection(result);
+    }
+
+    /**
+     * 预览渲染器
+     */
+    public previewComponent(component: PluginComponent,
+                            data: Record<string, string>): string {
+        const { slots, content, ...mappedData } = data;
+        const context = new RendererContext(mappedData, data.content);
+        // get component from plugin's renderers
+        const fragment = component.render(context);
+        const outerDiv: HTMLDivElement = document.createElement('div');
+        outerDiv.appendChild(fragment);
+        return outerDiv.innerHTML;
+    }
+
+    /**
+     * 销毁Editor实例
+     */
+    public destroy(): void {
+        LucenceCore._cache.value.components.loaded = false;
+        LucenceCore._cache.value.components.enable = false;
+        LucenceCore._cache.value.plugin.loaded = false;
+        LucenceCore._cache.value.plugin.enable = false;
+    }
+    
     // 返回缓存
     static get cache(): Ref<CacheType> {
         return LucenceCore._cache;
     }
     // 编辑器实例
     get editor(): Editor {
-        return this.instance;
+        return this.instance!;
     }
     // 插件列表
     get plugins(): Ref<PluginHolder[]> {
@@ -727,6 +829,38 @@ export class LucenceCore {
             ignoreUnescapedHTML: true,
             throwUnescapedHTML: false,
         });
+    }
+
+    public static uploadPlugin(file: File): void {
+        const formData = new FormData();
+        formData.append('pluginFilePart', file);
+        PluginResolver.HTTP.post("/apis/api.plugin.halo.run/v1alpha1/plugins/plugin-lucence-for-halo/plugin/upload", formData).then((response): void => {
+            const pluginName: string = file.name.split('.').slice(0, -1).join('.');
+            this.installPlugin(pluginName, `/apis/api.plugin.halo.run/v1alpha1/plugins/plugin-lucence-for-halo/plugin/get?pluginName=${pluginName}`);
+        })
+    }
+
+    /**
+     * 安装LucencePlugin插件，由{@link #uploadPlugin}方法先确认插件是否完整，
+     * 后将插件所在URL传递给该方法，该方法将插件信息注入到后端数据库中
+     */
+    private static installPlugin(name: string, source: string) {
+        PluginResolver.HTTP
+            .post<LucencePlugin>("/apis/lucence.plugin.halo.run/v1alpha1/lucencePlugins", {
+                "apiVersion": "lucence.plugin.halo.run/v1alpha1",
+                "detail": {
+                    "name": name,
+                    "source": source,
+                    "enable": true,
+                },
+                "kind": "LucencePlugin",
+                "metadata": {
+                    "generateName": "lucence-plugin-"
+                }
+            })
+            .then((response): void => {
+                console.log(`插件 ${name} 安装完成`)
+            })
     }
 
     /**

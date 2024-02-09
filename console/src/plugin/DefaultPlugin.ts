@@ -1,7 +1,8 @@
 import { PopupBuilder } from "@/util/PopupBuilder";
 import { ContextUtil } from "@/util/ContextUtil";
 import { AbstractPlugin } from "@/extension/BasePlugin";
-import type {PluginToolbar, PluginCommand, PluginDetail, PluginRenderer} from "@/extension/ArgumentPlugin";
+import type {PluginToolbar, PluginCommand, PluginDetail, PluginRenderers} from "@/extension/ArgumentPlugin";
+import type {RendererContext} from "@/core/PluginResolver";
 // @ts-ignore
 import katex from 'katex';
 
@@ -221,114 +222,35 @@ export class DefaultPlugin extends AbstractPlugin {
         ]
     }
 
-    createRenderer(): PluginRenderer | null {
+    createRenderer(): PluginRenderers | null {
         return [
             {
-                desc: "标记需要被渲染的原始代码块",
-                codeBlock(node: any): any {
-                    if (node.info === "mermaid") {
-                        return [
-                            { type: 'openTag', tagName: 'div', classNames: [node.info, 'mermaid-box', 'show-mermaid'] },
-                            { type: 'openTag', tagName: 'div', classNames: [node.info, 'mermaid-to-render'] },
-                            { type: 'text', content: node.literal! },
-                            { type: 'closeTag', tagName: 'div' },
-                            { type: 'openTag', tagName: 'div', classNames: [node.info, 'hide-mermaid'] },
-                            { type: 'text', content: node.literal! },
-                            { type: 'closeTag', tagName: 'div' },
-                            { type: 'closeTag', tagName: 'div' },
-                        ];
-                    }
-                    return [
-                        { type: 'openTag', tagName: 'pre', classNames: ['language-' + node.info] },
-                        { type: 'openTag', tagName: 'code', classNames: ['hljs', 'language-' + node.info] },
-                        { type: 'text', content: node.literal! },
-                        { type: 'closeTag', tagName: 'code' },
-                        { type: 'closeTag', tagName: 'pre' },
-                    ];
-                }
-            },
-            {
-                desc: "处理并渲染行内Latex",
-                text(node: any): any {
-                    // 渲染行内latex
-                    const content: string = node.literal;
-                    const regex: RegExp = /\$(.+?)\$/g;
-                    let result: any;
-                    let lastIndex: number = 0;
-                    const tokens: any = [];
-                    while (result = regex.exec(content)) {
-                        const [match, innerContent] = result;
-                        if (lastIndex !== result.index) {
-                            tokens.push({
-                                type: 'text',
-                                content: content.slice(lastIndex, result.index),
-                            });
-                        }
-                        const span = document.createElement('span');
-                        try {
-                            katex.render(innerContent, span);
-                            // 检查渲染后的内容是否为空
-                            if (span.innerHTML.trim() !== "") {
-                                tokens.push({
-                                    type: 'html',
-                                    content: span.outerHTML,
-                                });
-                            } else {
-                                tokens.push({
-                                    type: 'text',
-                                    content: match,
-                                });
+                name: 'latex',
+                desc: "插入多行Latex公式",
+                components: {
+                    latex: {
+                        allowContent: true,
+                        desc: '插入多行Latex公式',
+                        render: function (context: RendererContext) {
+                            const fragment: DocumentFragment = document.createDocumentFragment();
+                            const latexParagraph = document.createElement('p');
+                            latexParagraph.classList.add('lucence-block-latex')
+                            // 渲染块状latex
+                            const raw: string = context.getContent();
+                            const span: HTMLSpanElement = document.createElement('span');
+                            try {
+                                katex.render(raw, span);
+                            } catch (e) {
+                                span.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Wrong Latex syntax!'
+                                span.style.color = 'rgb(228, 105, 98)';
+                                span.style.fontStyle = 'italic';
                             }
-                        } catch (e) {
-                            // 如果渲染失败，则回退到原始文本
-                            tokens.push({
-                                type: 'text',
-                                content: match,
-                            });
+                            latexParagraph.innerHTML = span.outerHTML;
+                            fragment.append(latexParagraph);
+                            return fragment;
                         }
-                        lastIndex = regex.lastIndex;
                     }
-                    if (lastIndex < content.length) {
-                        tokens.push({
-                            type: 'text',
-                            content: content.slice(lastIndex),
-                        });
-                    }
-                    return tokens;
-                },
-            },
-            {
-                desc: "渲染块状Latex公式",
-                latex(node: any): any {
-                    // 渲染块状latex
-                    const raw: string = node.literal;
-                    const span: HTMLSpanElement = document.createElement('span');
-                    const tokens: any = [
-                        {
-                            type: 'openTag',
-                            tagName: 'p',
-                            classNames: ['lucence-block-latex'],
-                            outerNewLine: true
-                        }
-                    ];
-                    try {
-                        katex.render(raw, span);
-                        tokens.push({
-                            type: 'html',
-                            content: span.outerHTML,
-                        });
-                    } catch (e) {
-                        span.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Wrong Latex syntax!'
-                        span.style.color = 'rgb(228, 105, 98)';
-                        span.style.fontStyle = 'italic';
-                        tokens.push({
-                            type: 'html',
-                            content: span.outerHTML,
-                        });
-                    }
-                    tokens.push({ type: 'closeTag', tagName: 'p', outerNewLine: true })
-                    return tokens;
-                },
+                }
             }
         ];
     }

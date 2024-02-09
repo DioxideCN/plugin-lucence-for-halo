@@ -135,11 +135,12 @@
         <!-- Lucence Extension Module -->
         <div id="lucence-plugin--store"
              @click="closeExtension()"
-             v-if="LucenceCore.cache.value.plugin.enable">
+             v-if="LucenceCore.cache.value.plugin.loaded"
+             :style="`display:${LucenceCore.cache.value.plugin.enable ? 'flex' : 'none'}`">
             <div class="lucence-plugin--container"
                  @click.stop>
                 <div class="lucence-plugin--head unselectable">
-                    <div class="plugin-head--title">Extensions<span>扩展坞</span></div>
+                    <div class="plugin-head--title">Extensions<span>扩展</span></div>
                     <div class="plugin-head--close">
                         <i class="fa-solid fa-xmark closable" 
                            @click="closeExtension()"></i>
@@ -147,9 +148,15 @@
                 </div>
                 <div class="lucence-plugin--body">
                     <div class="lucence-plugin--list">
+                        <div class="lucence-plugin--card lucence-plugin--install"
+                             id="draggable-install"
+                             @click="uploadPlugin()">
+                            <i class="fa-solid fa-plus"></i>拖拽或选择文件安装扩展
+                            <input type="file" id="uploadPlugin" @change="handleUploadingPlugin()" style="display: none;">
+                        </div>
                         <div class="lucence-plugin--card"
                              v-for="(plugin, index) in core.plugins.value" 
-                             :key="index"
+                             :key="'plugin-' + index"
                              @click="switchViewPlugin(index)"
                              :class="pluginStore.activeOn===index?'active':''">
                             <div class="left-column">
@@ -177,12 +184,12 @@
                                 </span>
                             </p>
                             <div class="plugin-detail--subject">
-                                <span>Extension ID：{{ core.plugins.value[pluginStore.activeOn].key }}</span>
-                                <span>Author：{{ core.plugins.value[pluginStore.activeOn].detail.author }}</span>
+                                <span>扩展ID：{{ core.plugins.value[pluginStore.activeOn].key }}</span>
+                                <span>作者：{{ core.plugins.value[pluginStore.activeOn].detail.author }}</span>
                                 <span>
                                     <a :href="core.plugins.value[pluginStore.activeOn].detail.github"
                                    target="_blank">
-                                        <i class="fa-brands fa-github"></i>&nbsp;&nbsp;GitHub Page
+                                        <i class="fa-brands fa-github"></i>&nbsp;&nbsp;GitHub
                                     </a>
                                 </span>
                             </div>
@@ -238,7 +245,7 @@
                                     {{ core.plugins.value[pluginStore.activeOn].detail.description }}
                                 </template>
                                 <template v-else-if="pluginStore.actionOn === 1">
-                                    配置仍处于开发状态，最新状态请关注GitHub
+                                    插件配置仍处于开发状态，最新状态请关注GitHub
                                 </template>
                                 <template v-else-if="pluginStore.actionOn === 2">
                                     <ul class="ext-list--body">
@@ -281,10 +288,34 @@
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    <tr v-for="(item, index) in core.plugins.value[pluginStore.activeOn].register.renderers" :key="index">
-                                                        <td><code>{{ item.key }}</code></td>
-                                                        <td>{{ item.desc }}</td>
+                                                <template 
+                                                    v-for="(renderer, index) in core.plugins.value[pluginStore.activeOn].register.renderers" 
+                                                    :key="index">
+                                                    <tr>
+                                                        <td><code>{{ renderer.key }}</code></td>
+                                                        <td>{{ renderer.desc }}</td>
                                                     </tr>
+                                                    <tr class="secondary-table">
+                                                        <td class="secondary-table--td" colspan="2">
+                                                            <table>
+                                                                <thead>
+                                                                    <tr>
+                                                                        <th>组件ID</th>
+                                                                        <th>描述</th>
+                                                                        <th>在组件库中</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    <tr v-for="(key, idx) in Object.keys(renderer.components)" :key="'component-' + renderer.key + '-' + idx">
+                                                                        <td>{{ key }}</td>
+                                                                        <td>{{ renderer.components[key].desc }}</td>
+                                                                        <td>{{ renderer.components[key].showInComponents === false ? '×' : '√' }}︎</td>
+                                                                    </tr>
+                                                                </tbody>
+                                                            </table>
+                                                        </td>
+                                                    </tr>
+                                                </template>
                                                 </tbody>
                                             </table>
                                         </li>
@@ -344,12 +375,107 @@
                 </div>
             </div>
         </div>
+        <!-- Lucence Insert Module -->
+        <div id="lucence-insert--module"
+             v-if="LucenceCore.cache.value.components.loaded"
+             :style="'bottom:' + (LucenceCore.cache.value.components.enable ? '30px' : '-45%')">
+            <div class="lucence-insert--head unselectable">
+                <div class="insert-head--title">Components<span>组件</span></div>
+                <div class="insert-head--close" @click="core.toggle.components()">
+                    <i class="fa-solid fa-xmark closable"></i>
+                </div>
+            </div>
+            <div class="lucence-insert--container">
+                <div class="insert-container--renderers unselectable">
+                    <div class="renderers-list--container">
+                        <div class="renderer-each--plugin"
+                             v-for="(plugin, index) in core.plugins.value"
+                             :key="'renderer-' + index"
+                             @click="togglePluginComponents(index)"
+                             :class="componentsStore.activeIndex===index?'active':''">
+                            <img :alt="plugin.key"
+                                 :src="plugin.detail.icon"
+                                 width="46"
+                                 height="46" />
+                        </div>
+                    </div>
+                    <div class="renderers-renderer--list">
+                        <div class="renderer-collection"
+                             v-for="(renderer, index) in core.plugins.value[componentsStore.activeIndex].register.renderers"
+                             :key="'collection-' + index">
+                            <div class="renderer-collection--title">
+                                GROUP {{ renderer.name.toUpperCase() }}
+                            </div>
+                            <template v-for="(componentName, idx) in Object.keys(renderer.components)"
+                                      :key="'component-' + renderer.name + '-' + componentName">
+                                <div class="component-of-renderer"
+                                     :class="componentsStore.selectComponentIdx === idx ? 'active' : ''"
+                                     @click="togglePluginComponent(idx, index, renderer.name, componentName)"
+                                     v-if="renderer.components[componentName].showInComponents !== false">
+                                    <div class="component-title">{{ componentName }}</div>
+                                    <div class="component-desc">{{ renderer.components[componentName].desc }}</div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+                <div class="insert-container--panel">
+                    <div class="insert-renderer--config insert-renderer--section">
+                        <div class="section--head unselectable">
+                            <div class="head--title">配置</div>
+                        </div>
+                        <div class="section-body">
+                            <template v-if="componentsStore.selectComponent && (componentsStore.selectComponent.attributes || componentsStore.selectComponent.allowContent === true)">
+                                <FormKit v-model="componentsStore.data" 
+                                         @keyup="updatePreview()"
+                                         type="form">
+                                    <FormKitSchema v-if="componentsStore.selectComponent!.attributes" 
+                                                   :key="`key-${core.plugins.value[componentsStore.activeIndex].detail.name}-${componentsStore.selectComponentName}`" 
+                                                   :schema="componentsStore.selectComponent.attributes" 
+                                                   :data="componentsStore.data" />
+                                    <FormKit
+                                        v-if="componentsStore.selectComponent.allowContent === true"
+                                        type="textarea"
+                                        name="content"
+                                        label="内容"
+                                        :help="componentsStore.selectComponent.allowContentHTML === true ? '填写组件的HTML内容' : '填写组件的文本内容'"/>
+                                </FormKit>
+                            </template>
+                        </div>
+                        <div class="section--footer unselectable"
+                             :class="(componentsStore.selectComponentIdx === -1 || componentsStore.selectRenderer!.components[componentsStore.selectComponentName].attributes) ? 'disable' : ''">
+                            <div class="footer--clear" @click="clearInsertInfo()">清空</div>
+                            <div class="footer--confirm" @click="insertComponent()">插入</div>
+                        </div>
+                    </div>
+                    <div class="insert-renderer--preview insert-renderer--section">
+                        <div class="section--head">
+                            <div class="head--title unselectable">预览</div>
+                        </div>
+                        <div class="section-body" v-html="componentsStore.previewHTML">
+                        </div>
+                        <div class="section--footer">
+                            <div class="footer--description">
+                                <div class="description--head unselectable">组件描述</div>
+                                <div class="description--body">
+                                    {{
+                                        componentsStore.selectRenderer?.desc
+                                    }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </section>
 </template>
 
 <script lang="ts" setup>
-import { onMounted, ref } from "vue";
-import { LucenceCore } from "@/core/LucenceCore";
+import {onMounted, onUnmounted, ref} from "vue";
+import {LucenceCore} from "@/core/LucenceCore";
+import {FormKit, FormKitSchema} from "@formkit/vue";
+import type {PluginComponent, PluginRenderer} from "@/extension/ArgumentPlugin";
 
 const emit = defineEmits<{
     (event: "update:raw",     value: string): void;
@@ -369,6 +495,7 @@ const props = defineProps({
     },
 });
 let core: LucenceCore;
+// Plugin Store Module
 const pluginStore = ref({
     activeOn: 0,
     actionOn: 0,
@@ -381,21 +508,100 @@ function closeExtension(): void {
     pluginStore.value.actionOpen = [true, true, true];
 }
 function switchActionOpen(index: number): void {
+    if (pluginStore.value.activeOn === index) return;
     pluginStore.value.actionOpen[index] = !pluginStore.value.actionOpen[index];
 }
 function switchViewPlugin(index: number): void {
+    if (pluginStore.value.activeOn === index) return;
     pluginStore.value.activeOn = index;
     pluginStore.value.actionOn = 0;
 }
+// ------ 组件变量对象
+const componentsStore = ref({
+    activeIndex: 0,
+    selectRendererIdx: -1,
+    selectRenderer: null as PluginRenderer | null,
+    selectRendererName: '',
+    selectComponentIdx: -1,
+    selectComponent: null as PluginComponent | null,
+    selectComponentName: '',
+    previewHTML: '',
+    data: { content: '', } as any,
+});
+// ------ 切换插件，清空选中的对象
+function togglePluginComponents(index: number) {
+    if (componentsStore.value.activeIndex === index) return;
+    componentsStore.value.activeIndex = index;
+    componentsStore.value.selectRendererIdx = -1;
+    componentsStore.value.selectRenderer = null;
+    componentsStore.value.selectRendererName = '';
+    componentsStore.value.selectComponentIdx = -1;
+    componentsStore.value.selectComponent = null;
+    componentsStore.value.selectComponentName = '';
+    componentsStore.value.previewHTML = '';
+    componentsStore.value.data = { content: '', };
+}
+// ------ 切换组件
+function togglePluginComponent(index: number, selectRenderer: number, selectRendererName: string, componentName: string) {
+    if (componentsStore.value.selectComponentIdx === index) return;
+    componentsStore.value.selectRendererIdx = selectRenderer;
+    componentsStore.value.selectRenderer = core.plugins.value[componentsStore.value.activeIndex].register.renderers[componentsStore.value.selectRendererIdx];
+    componentsStore.value.selectRendererName = selectRendererName;
+    componentsStore.value.selectComponentIdx = index;
+    componentsStore.value.selectComponent = core.plugins.value[componentsStore.value.activeIndex].register.renderers[componentsStore.value.selectRendererIdx].components[componentName];
+    componentsStore.value.selectComponentName = componentName;
+    componentsStore.value.previewHTML = '';
+    componentsStore.value.data = { content: '', };
+}
+// ------ 验证组件有效性以便后续插入组件和清空组件表单
+function isValidComponent(): boolean {
+    return (componentsStore.value.selectComponent !== null && componentsStore.value.selectComponent.attributes?.length === 0);
+}
+// ------ 插入组件
+function insertComponent() {
+    if (isValidComponent()) return;
+    core.insertComponent(componentsStore.value.selectRendererName, {
+        name: componentsStore.value.selectComponentName,
+        ...componentsStore.value.data,
+    });
+}
+// ------ 清空表单
+function clearInsertInfo() {
+    if (isValidComponent()) return;
+    componentsStore.value.data = {};
+}
+// ------ 更新组件预览
+function updatePreview() {
+    componentsStore.value.previewHTML = core.previewComponent(componentsStore.value.selectComponent!, componentsStore.value.data);
+}
+// ------ 上传插件
+function uploadPlugin() {
+    const fileInput = document.getElementById('uploadPlugin')! as HTMLInputElement;
+    fileInput.click();
+}
+function handleUploadingPlugin() {
+    const fileInput = document.getElementById('uploadPlugin')! as HTMLInputElement;
+    if (!fileInput.files) return;
+    const file: File = fileInput.files[0];
+    if (file) {
+        LucenceCore.uploadPlugin(file);
+    }
+}
+
 onMounted(async () => {
-    // 回显暴露的核心
-    core = new LucenceCore(props.raw).build(function (): void {
+    // 实例化编辑器
+    core = new LucenceCore();
+    await core.postConstructor(props.raw);
+    core.build(function (): void {
         const markdown: string = core.getMarkdown();
         const html: string = core.getHTML();
         emit('update:raw',     markdown);
         emit('update:content', html);
         emit('update',         markdown);
     });
+})
+onUnmounted(async () => {
+    core.destroy();
 })
 </script>
 
