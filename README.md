@@ -51,6 +51,8 @@ halo:
 
 If you have innovative ideas or discover any issues, we encourage you to contribute by forking the repository and submitting a Pull Request. Once your code passes the tests, it will be merged into the main branch, becoming a permanent part of "Lucence for Halo".
 
+If you are considering developing an extension for Lucence Editor, you can refer to this repository: https://github.com/DioxideCN/default-lucence-plugin.
+
 ## License
 
 [GPL-3.0 license](https://github.com/DioxideCN/plugin-lucence-for-halo/blob/main/LICENSE)
