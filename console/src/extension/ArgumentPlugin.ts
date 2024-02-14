@@ -1,9 +1,6 @@
 import type {ToolbarItemOptions} from "@toast-ui/editor/types/ui";
 import type {CommandFn} from "@toast-ui/editor/types/plugin";
 import type {Stack} from "@/core/BasicStructure";
-import type {MdNode, PluginInfo} from "@toast-ui/editor";
-import type {HTMLConvertor, HTMLToken} from "@toast-ui/editor/types/toastmark";
-import type {CustomHTMLRenderer} from "@toast-ui/editor/types/editor";
 import type {RendererContext} from "@/core/PluginResolver";
 
 export type PluginToolbar = {
@@ -20,13 +17,16 @@ export type PluginCommand = {
  * 暴露给第三方开发者的插件信息定义类型
  */
 export type PluginDetail = {
-    icon: string,
-    name: string,
-    display: string,
-    author: string,
-    version: string,
-    description: string,
-    github: string,
+    icon: string, // 图标地址
+    name: string, // 展示名称
+    author: string, // 作者
+    version: string, // 版本
+    description: string, // 简介
+    github: string, // 开源地址
+    external?: { // 外部资源
+        style?: string[] | undefined, // <link>资源
+        script?: string[] | undefined, // <script>资源
+    } | undefined,
 }
 /**
  * 扩展槽的信息统计
@@ -34,6 +34,11 @@ export type PluginDetail = {
 export type PluginHolder = {
     key: string,
     detail: PluginDetail,
+    metadata: {
+        name: string,
+        version: number,
+    },
+    enable: boolean,
     register: {
         toolbar: {
             key: string,
@@ -56,7 +61,12 @@ export type PluginHolder = {
             eventType: PluginEvent,
             desc: string | undefined,
         }[],
-    }
+    },
+    external: { // 外部资源
+        source: string, // <theme> Plugin Url
+        style?: string[] | undefined, // <link>资源
+        script?: string[] | undefined, // <script>资源
+    },
 }
 export type PluginList = Stack<PluginHolder>;
 
@@ -106,6 +116,7 @@ export type PluginRenderers = PluginRenderer[];
 
 export type PluginComponent = {
     desc?: string,    // 描述
+    icon?: string | undefined, // 图标
     showInComponents?: boolean | undefined, // 是否在组件中启用自动插入，默认为true
     allowContent?: boolean | undefined;
     allowContentHTML?: boolean | undefined;
@@ -113,3 +124,26 @@ export type PluginComponent = {
     render: (context: RendererContext) => DocumentFragment;
 };
 export type PluginComponents = Record<string, PluginComponent>;
+
+export type FrontPluginHandler = {
+    onUninstalling: boolean,
+    onDisable: boolean,
+    message: {
+        text: string,
+        type: '' | 'info' | 'success' | 'warning' | 'danger'
+    }
+}
+
+export type Notification = {
+    closable?: boolean | undefined,
+    loading?: boolean | undefined,
+    type: 'info' | 'warning' | 'error',
+    message: string,
+    source: string,
+    reactive: 'change-plugin' | 'install-theme-plugin' | 'none',
+    fixed?: boolean | undefined,
+    active?: boolean | undefined,
+    metadata?: {
+        themePlugin?: PluginHolder | undefined,
+    } | undefined,
+}

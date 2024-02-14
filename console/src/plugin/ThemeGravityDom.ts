@@ -1,4 +1,4 @@
-import {AbstractPlugin} from "@/extension/BasePlugin";
+import {AbstractPlugin} from "@/extension/AbstractPlugin";
 import type {PluginDetail, PluginRenderers, PluginComponents} from "@/extension/ArgumentPlugin";
 import type {RendererContext} from "@/core/PluginResolver";
 
@@ -7,7 +7,7 @@ export class ThemeGravityDom extends AbstractPlugin {
     public readonly detail: PluginDetail = {
         icon: "https://dioxide-cn.ink/upload/gravity-logo.png",
         name: "theme_gravity_renderer",
-        display: "Gravity主题渲染",
+        name: "Gravity主题渲染",
         author: "DioxideCN",
         version: "1.0.0",
         description: "嵌入Gravity主题的自定义DOM的显示支持",

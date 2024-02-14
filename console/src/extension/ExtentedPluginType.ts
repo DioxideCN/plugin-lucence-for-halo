@@ -19,9 +19,9 @@ export interface LucencePlugin {
 }
 
 export interface LucencePluginDetail {
-    name: string,
-    source: string;
-    enable?: boolean;
+    name: string, // 对应插件文件的文件名
+    source: string; // 插件的访问路径
+    enable: boolean; // 是否启用
 }
 
 export interface LucencePluginList {

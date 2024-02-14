@@ -1,6 +1,6 @@
 import { PopupBuilder } from "@/util/PopupBuilder";
 import { ContextUtil } from "@/util/ContextUtil";
-import { AbstractPlugin } from "@/extension/BasePlugin";
+import { AbstractPlugin } from "@/extension/AbstractPlugin";
 import type {PluginToolbar, PluginCommand, PluginDetail, PluginRenderers} from "@/extension/ArgumentPlugin";
 import type {RendererContext} from "@/core/PluginResolver";
 // @ts-ignore
@@ -12,9 +12,8 @@ import katex from 'katex';
 export class DefaultPlugin extends AbstractPlugin {
 
     public readonly detail: PluginDetail = {
-        icon: "https://tyriar.gallerycdn.vsassets.io/extensions/tyriar/luna-paint/0.16.0/1661007177305/Microsoft.VisualStudio.Services.Icons.Default",
-        name: "default_extension",
-        display: "内置扩展",
+        icon: "https://dioxide-cn.ink/upload/logo-lucence.png",
+        name: "内置扩展",
         author: "DioxideCN",
         version: "1.0.0",
         description: "Lucence Editor自带的基础扩展，不可卸载或禁用，该扩展为Lucence Editor编辑器提供基本的运行负载，包括：Toolbar选项、HTML渲染器、事件触发器、基本指令扩展等。",
@@ -112,12 +111,6 @@ export class DefaultPlugin extends AbstractPlugin {
                     command: 'blockQuote',
                     className: 'fa-solid fa-quote-left',
                     state: 'blockQuote',
-                },
-                {
-                    name: 'tool-latexBlock',
-                    tooltip: 'Latex公式',
-                    command: 'latexBlock',
-                    className: 'fa-solid fa-square-root-variable',
                 },
                 {
                     name: 'tool-code',
@@ -231,6 +224,7 @@ export class DefaultPlugin extends AbstractPlugin {
                     latex: {
                         allowContent: true,
                         desc: '插入多行Latex公式',
+                        icon: 'fa-solid fa-square-root-variable',
                         render: function (context: RendererContext) {
                             const fragment: DocumentFragment = document.createDocumentFragment();
                             const latexParagraph = document.createElement('p');

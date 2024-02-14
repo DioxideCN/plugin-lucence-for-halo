@@ -8,19 +8,12 @@ import {ContextUtil} from "@/util/ContextUtil";
 import {SearchUtil} from "@/util/SearchUtil";
 import type {AreaType, CacheType} from "@/core/TypeDefinition";
 import type {SelectionPos} from "@toast-ui/editor/types/editor";
-import type {
-    EventHandler,
-    PluginEvent,
-    PluginHolder,
-    PluginRenderer,
-    PluginComponent
-} from "@/extension/ArgumentPlugin";
+import type {EventHandler, Notification, PluginComponent, PluginEvent, PluginHolder} from "@/extension/ArgumentPlugin";
 import {PluginEventHolder} from "@/core/BasicStructure";
-import type {AbstractPlugin} from "@/extension/BasePlugin";
+import type {AbstractPlugin} from "@/extension/AbstractPlugin";
 import {PluginResolver, RendererContext} from "@/core/PluginResolver";
 import {LineWalker} from "@/kernel/LineWalker";
-import type {LucencePlugin} from "@/extension/ExtentedPluginType";
-import axios, {type AxiosInstance} from "axios";
+import type {LucencePlugin, LucencePluginList} from "@/extension/ExtentedPluginType";
 
 export class LucenceCore {
     
@@ -91,12 +84,15 @@ export class LucenceCore {
      * 这包括toolbar、自定义的渲染规则和命令注册
      */
     public async postConstructor(rawContent: string) {
+        // 等待 PluginResolver 实例化
         await this.resolver.postConstructor();
+        // 获取编辑器 DOM 实例
         const editorOuter: HTMLElement =
             document.querySelector('#toast-editor') as HTMLElement;
         if (!editorOuter) {
             throw new Error('Cannot find element from id \'#toast-editor\'!');
         }
+        // 构造 ToastUIEditor 对象并绑定到 editorOuter
         this.instance = new Editor({
             el: editorOuter,
             previewStyle: 'vertical',
@@ -106,20 +102,23 @@ export class LucenceCore {
             previewHighlight: false,
             toolbarItems: [[]],
             initialValue: rawContent,
-            // 定义Markdown到HTML的渲染规则
+            // 从resolver获取所有插件构造好的Markdown到HTML的渲染规则
             customHTMLRenderer: this.resolver.rendererSource,
         });
+        // 定义常用的DOM选区
         this.area = {
-            // 预览区
+            // Editor右侧预览区
             preview: document.getElementsByClassName('toastui-editor-md-preview')[0]! as HTMLElement,
-            // 编辑区包括行容器和markdown编辑器
+            // Editor左侧的整个markdown编辑区
             editor: document.getElementsByClassName('toastui-editor md-mode')[0]! as HTMLElement,
             // 编辑区与预览区之间的分割线
             split: document.getElementsByClassName('toastui-editor-md-splitter')[0]! as HTMLElement,
-            // markdown编辑器
+            // Editor左侧的markdown编辑器
             mdEditor: document.getElementsByClassName('toastui-editor md-mode')[0].getElementsByClassName('ProseMirror')[0]! as HTMLElement,
         }
-        this.resolver.build(this); // 装配core到resolver形成完整的resolver
+        // 将core装配到resolver以继续后续的工具栏、命令等注入步骤
+        this.resolver.build(this);
+        // 定义事件容器
         this.eventHolder = new PluginEventHolder(this.resolver);
         // 初始化行数容器对象
         this.lineWalker = LineWalker.init(this.instance);
@@ -393,37 +392,11 @@ export class LucenceCore {
         plugin: {
             open: (): void => {
                 LucenceCore._cache.value.plugin.enable = true;
-                if (!LucenceCore.buildDraggableOnce) {
-                    LucenceCore.buildDraggable();
-                }
             },
             close: (): void => {
                 LucenceCore._cache.value.plugin.enable = false;
             }
         },
-    }
-    
-    private static buildDraggableOnce: boolean = false;
-    private static buildDraggable() {
-        const draggableInstall = document.getElementById('draggable-install')!;
-        // 拖拽上传
-        draggableInstall.addEventListener("dragenter", handleEvent);
-        draggableInstall.addEventListener("dragover", handleEvent);
-        draggableInstall.addEventListener("drop", handleEvent);
-        draggableInstall.addEventListener("dragleave", handleEvent);
-        function handleEvent(event: any) {
-            event.preventDefault();
-            if (event.type === 'drop') {
-                draggableInstall.classList.remove('draggable');
-                if (event.dataTransfer.files.length === 0) return;
-                const file = event.dataTransfer.files[0];
-                LucenceCore.uploadPlugin(file);
-            } else if (event.type === 'dragleave') {
-                draggableInstall.classList.remove('draggable');
-            } else {
-                draggableInstall.classList.add('draggable');
-            }
-        }
     }
 
     private isReplacing: boolean = false;
@@ -752,13 +725,13 @@ export class LucenceCore {
     /**
      * 富文本编辑器的事件调用和唤起
      */
-    public on(plugin: AbstractPlugin,
+    public on(plugin: PluginHolder,
               event: PluginEvent,
               desc: string,
               callback: EventHandler): void {
         // 事件类型和回调器压栈
         this.eventHolder!.register(
-            plugin.detail.name,
+            plugin.key,
             {
                 type: event,
                 desc: desc,
@@ -798,10 +771,14 @@ export class LucenceCore {
      * 销毁Editor实例
      */
     public destroy(): void {
+        // 卸载组件库和插件库
         LucenceCore._cache.value.components.loaded = false;
         LucenceCore._cache.value.components.enable = false;
         LucenceCore._cache.value.plugin.loaded = false;
         LucenceCore._cache.value.plugin.enable = false;
+        // 清空通知
+        LucenceCore.notificationCenterOpened.value = false;
+        LucenceCore.clearAllNotifications();
     }
     
     // 返回缓存
@@ -831,35 +808,204 @@ export class LucenceCore {
         });
     }
 
-    public static uploadPlugin(file: File): void {
-        const formData = new FormData();
-        formData.append('pluginFilePart', file);
-        PluginResolver.HTTP.post("/apis/api.plugin.halo.run/v1alpha1/plugins/plugin-lucence-for-halo/plugin/upload", formData).then((response): void => {
-            const pluginName: string = file.name.split('.').slice(0, -1).join('.');
-            this.installPlugin(pluginName, `/apis/api.plugin.halo.run/v1alpha1/plugins/plugin-lucence-for-halo/plugin/get?pluginName=${pluginName}`);
+    public static notificationCenterOpened = ref(false);
+    public static notificationTypeHolder = ref([0, 0, 0]);
+    public static notifyMode = ref(LucenceCore.getNotifyMode());
+    private static _notificationCenterMap = ref<Map<string, Notification>>(new Map<string, Notification>());
+
+    /**
+     * 切换通知状态
+     */
+    public static switchNotifyMode(): 'mute' | 'notify' {
+        const newMode: 'mute' | 'notify' = 
+            LucenceCore.notifyMode.value === 'mute' ? 'notify' : 'mute';
+        localStorage.setItem('editor-notify-mode', newMode);
+        LucenceCore.notifyMode.value = newMode;
+        return newMode;
+    }
+    
+    /**
+     * 推送通知
+     */
+    public static pushNotification(notification: Notification): string {
+        const UUID = LucenceCore.uniqueId(); // 唯一ID
+        notification.active = true; // 默认被激活
+        notification.fixed = false; // 默认未被固定在通知栏中
+        LucenceCore._notificationCenterMap.value.set(UUID, notification)
+        if (notification.type === 'warning') {
+            LucenceCore.notificationTypeHolder.value[1]++;
+        } else if (notification.type === 'error') {
+            LucenceCore.notificationTypeHolder.value[2]++;
+        } else {
+            LucenceCore.notificationTypeHolder.value[0]++;
+        }
+        setTimeout((): void => {
+            const notification = LucenceCore._notificationCenterMap.value.get(UUID);
+            if (notification && !notification.fixed) { // 未被固定在通知栏中
+                // 一旦被生产则5秒后划走
+                notification.active = false;
+                LucenceCore._notificationCenterMap.value.set(UUID, notification);
+            }
+        }, 4500);
+        return UUID;
+    }
+
+    /**
+     * 切换打开通知中心
+     */
+    public static switchOpenNotificationCenter() {
+        LucenceCore.notificationCenterOpened.value = !LucenceCore.notificationCenterOpened.value;
+        LucenceCore._notificationCenterMap.value.forEach((notification, UUID) => {
+            notification.active = LucenceCore.notificationCenterOpened.value;
+            // 打开一次通知栏所有的通知都被固定到通知栏直到通知本身被销毁
+            notification.fixed = true;
+            LucenceCore._notificationCenterMap.value.set(UUID, notification);
         })
     }
 
     /**
-     * 安装LucencePlugin插件，由{@link #uploadPlugin}方法先确认插件是否完整，
-     * 后将插件所在URL传递给该方法，该方法将插件信息注入到后端数据库中
+     * 关闭某一个通知
      */
-    private static installPlugin(name: string, source: string) {
-        PluginResolver.HTTP
-            .post<LucencePlugin>("/apis/lucence.plugin.halo.run/v1alpha1/lucencePlugins", {
+    public static closeNotification(UUID: string) {
+        const ntf = LucenceCore._notificationCenterMap.value.get(UUID);
+        if (!ntf) return;
+        if (ntf.type === 'warning') {
+            LucenceCore.notificationTypeHolder.value[1]--;
+        } else if (ntf.type === 'error') {
+            LucenceCore.notificationTypeHolder.value[2]--;
+        } else {
+            LucenceCore.notificationTypeHolder.value[0]--;
+        }
+        LucenceCore._notificationCenterMap.value.delete(UUID);
+    }
+
+    /**
+     * 关闭所有通知
+     */
+    public static clearAllNotifications() {
+        LucenceCore._notificationCenterMap.value.clear();
+        LucenceCore.notificationTypeHolder.value = [0, 0, 0];
+    }
+
+    public static get notifications(): Ref<Map<string, Notification>> {
+        return this._notificationCenterMap;
+    }
+
+    private static readonly BASE_URL = "/apis/api.plugin.halo.run/v1alpha1/plugins/plugin-lucence-for-halo/plugin";
+    private static readonly BASE_URL_D = "/apis/lucence.plugin.halo.run/v1alpha1/lucencePlugins";
+
+    /**
+     * 检查当前的插件是否已存在
+     */
+    public static async checkExist(pluginName: string) {
+        const pluginListResponse = await PluginResolver.HTTP.get<LucencePluginList>("/apis/lucence.plugin.halo.run/v1alpha1/lucencePlugins");
+        for (let plugin of pluginListResponse.data.items) {
+            if (plugin.detail.name === pluginName) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    public static async installThemePlugin(themePluginHolder: PluginHolder) {
+        const isExist = await LucenceCore.checkExist(themePluginHolder.key);
+        if (isExist) return;
+        // 安装插件
+        return await PluginResolver.HTTP
+            .post<LucencePlugin>(LucenceCore.BASE_URL_D, {
                 "apiVersion": "lucence.plugin.halo.run/v1alpha1",
                 "detail": {
-                    "name": name,
-                    "source": source,
+                    // 插件的Name，即文件名
+                    "name": themePluginHolder.key,
+                    // 插件资源在后端的URL
+                    "source": themePluginHolder.external!.source,
+                    // 是否启用，默认安装后启用
                     "enable": true,
                 },
                 "kind": "LucencePlugin",
                 "metadata": {
                     "generateName": "lucence-plugin-"
                 }
-            })
-            .then((response): void => {
-                console.log(`插件 ${name} 安装完成`)
+            });
+    }
+    
+    /**
+     * 上传插件
+     */
+    public static async uploadPlugin(file: File) {
+        // 验证file的合法性
+        const fileName = file.name; // 带后缀的文件名，如xxx.js
+        const pluginName: string = fileName.split('.').slice(0, -1).join('.');
+        const extension = fileName.slice(fileName.lastIndexOf('.') + 1);
+        if (extension.toLowerCase() !== 'js') {
+            throw Error('无效的扩展文件');
+        }
+        if (pluginName.toLowerCase() === 'default_extension') {
+            throw Error('无效的扩展文件名');
+        }
+        const isExist = await LucenceCore.checkExist(pluginName);
+        if (isExist) return; // 插件已存在
+        // 向后端请求的参数体
+        const formData = new FormData();
+        formData.append('pluginFilePart', file);
+        // 上传插件文件
+        const uploadResponse = await PluginResolver.HTTP.post(`${LucenceCore.BASE_URL}/upload`, formData);
+        if (uploadResponse.data.code !== 200) {
+            return uploadResponse;
+        }
+        // 安装插件
+        return await PluginResolver.HTTP
+            .post<LucencePlugin>(LucenceCore.BASE_URL_D, {
+                "apiVersion": "lucence.plugin.halo.run/v1alpha1",
+                "detail": {
+                    // 插件的Name，即文件名
+                    "name": pluginName,
+                    // 插件资源在后端的URL
+                    "source": `${LucenceCore.BASE_URL}/get?pluginName=${pluginName}`,
+                    // 是否启用，默认安装后启用
+                    "enable": true,
+                },
+                "kind": "LucencePlugin",
+                "metadata": {
+                    "generateName": "lucence-plugin-"
+                }
+            });
+    }
+
+    /**
+     * 卸载插件
+     */
+    public static async uninstallPlugin(holder: PluginHolder) {
+        const isExist = await LucenceCore.checkExist(holder.key);
+        if (!isExist) return; // 插件已被卸载
+        // 先删数据库的数据
+        await PluginResolver.HTTP
+            .delete(`${LucenceCore.BASE_URL_D}/${holder.metadata.name}`);
+        // 再删文件
+        return await PluginResolver.HTTP
+            .post(`${LucenceCore.BASE_URL}/uninstall/${holder.key}`);
+    }
+
+    /**
+     * 禁用或启用插件
+     */
+    public static async switchDisablePlugin(holder: PluginHolder) {
+        const isExist = await LucenceCore.checkExist(holder.key);
+        if (!isExist) return; // 插件已被卸载
+        await PluginResolver.HTTP
+            .put<LucencePlugin>(`${LucenceCore.BASE_URL_D}/${holder.metadata.name}`, {
+                "apiVersion": "lucence.plugin.halo.run/v1alpha1",
+                "detail": {
+                    "name": holder.key,
+                    "source": holder.external.source,
+                    "enable": !holder.enable,
+                },
+                "kind": "LucencePlugin",
+                "metadata": {
+                    "generateName": "lucence-plugin-",
+                    "name": holder.metadata.name,
+                    "version": holder.metadata.version
+                }
             })
     }
 
@@ -873,8 +1019,19 @@ export class LucenceCore {
             theme = 'light';
             localStorage.setItem('editor-theme', theme);
         }
-        // @ts-ignore
-        return theme;
+        return theme as 'light' | 'night';
+    }
+
+    /**
+     * 获取通知状态是否通知
+     */
+    private static getNotifyMode(): 'mute' | 'notify' {
+        let notifyMode: string | null = localStorage.getItem('editor-notify-mode');
+        if (notifyMode !== 'mute' && notifyMode !== 'notify') {
+            notifyMode = 'notify';
+            localStorage.setItem('editor-notify-mode', notifyMode);
+        }
+        return notifyMode as 'mute' | 'notify';
     }
 
     /**
@@ -965,6 +1122,12 @@ export class LucenceCore {
             .catch(e => {
                 console.error(e);
             });
+    }
+
+    private static uniqueId(): string {
+        const timestamp = Date.now().toString(36); // 使用当前时间戳作为一部分
+        const randomString = Math.random().toString(36).substr(2, 5); // 生成一个随机字符串
+        return timestamp + randomString;
     }
     
 }

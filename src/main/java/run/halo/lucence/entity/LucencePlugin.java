@@ -33,7 +33,7 @@ public class LucencePlugin extends AbstractExtension {
         private String source;
 
         // Lucence插件的启用状态
-        @Schema(defaultValue = "true")
+        @Schema(requiredMode = REQUIRED, defaultValue = "true")
         private Boolean enable;
     }
 

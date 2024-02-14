@@ -1,14 +1,8 @@
-import type {
-    PluginCommand,
-    PluginHolder,
-    PluginList,
-    PluginRenderers,
-    PluginToolbar
-} from "@/extension/ArgumentPlugin";
-import type {AbstractPlugin } from "@/extension/BasePlugin";
+import type {PluginCommand, PluginHolder, PluginList, PluginRenderers, PluginToolbar} from "@/extension/ArgumentPlugin";
+import type {AbstractPlugin} from "@/extension/AbstractPlugin";
 import {Stack} from "@/core/BasicStructure";
 import type {ToolbarItemOptions} from "@toast-ui/editor/types/ui";
-import type {LucenceCore} from "@/core/LucenceCore";
+import {LucenceCore} from "@/core/LucenceCore";
 import {DefaultPlugin} from "@/plugin/DefaultPlugin";
 import type {MdNode} from "@toast-ui/editor";
 // @ts-ignore
@@ -34,11 +28,11 @@ export class PluginResolver {
         timeout: 1000,
     });
 
-    private readonly _rawHolder: Map<string, PluginHolder> = new Map();
-    private readonly _rawPluginList: AbstractPlugin[] = [];
+    private readonly _rawHolderAndPlugin = new Map<PluginHolder, AbstractPlugin>();
     private readonly _pluginList: PluginList = new Stack<PluginHolder>();
+    private _themePlugin: AbstractPlugin | null = null;
     
-    // ------ 初始化渲染器
+    // ------ 初始化default的渲染器
     private _rendererSource: Record<string, any> = {
         codeBlock(node: any):any {
             if (node.info === "mermaid") {
@@ -114,34 +108,118 @@ export class PluginResolver {
 
     // 自动挂载的前置处理
     public async postConstructor() {
-        const rawPlugins: AbstractPlugin[] = [];
         // load Default Plugin
         const defaultOne: DefaultPlugin = new DefaultPlugin();
-        rawPlugins.push(defaultOne);
+        const rawDefaultHolder: PluginHolder = {
+            key: 'default_extension',
+            detail: defaultOne.detail,
+            metadata: {
+                name: 'lucence-plugin-default',
+                version: 0,
+            },
+            enable: true,
+            register: {
+                toolbar: [],
+                renderers: [],
+                command: [],
+                event: [],
+            },
+            external: {
+                source: ''
+            }
+        };
+        this._rawHolderAndPlugin.set(rawDefaultHolder, defaultOne);
         await PluginResolver.HTTP
             .get<LucencePluginList>("/apis/lucence.plugin.halo.run/v1alpha1/lucencePlugins")
             .then(async (response) => {
                 const plugins = response.data.items;
+                const themeResponse = await PluginResolver.HTTP.get("/apis/api.console.halo.run/v1alpha1/themes/-/activation");
+                // 获取主题下是否存在插件
+                let themeName = '', themePluginUrl = '';
+                if (themeResponse.data.status.location) {
+                    const path = themeResponse.data.status.location as string;
+                    const folders = path.split("\\");
+                    themeName = folders[folders.length - 1];
+                    themePluginUrl = `/themes/${themeName}/assets/lucence/${themeName}.js`;
+                    await import(themePluginUrl).then(module => {
+                        this._themePlugin = new module.default as AbstractPlugin;
+                    }).catch((err) => {
+                    })
+                }
+                let isThemePluginInstalled = false;
                 for (let plugin of plugins) {
                     await import(plugin.detail.source).then(module => {
-                        if (plugin.detail.enable) {
-                            // load plugin
-                            rawPlugins.push(new module.default);
+                        const rawPlugin: AbstractPlugin = new module.default as AbstractPlugin;
+                        if (plugin.detail.name === themeName) {
+                            isThemePluginInstalled = true; // 主题自带的插件已被安装
                         }
+                        // 生成PluginHolder
+                        const rawHolder: PluginHolder = {
+                            key: plugin.detail.name,
+                            detail: rawPlugin.detail,
+                            metadata: {
+                                name: plugin.metadata.name,
+                                version: plugin.metadata.version ? plugin.metadata.version : 0,
+                            },
+                            enable: plugin.detail.enable,
+                            register: {
+                                toolbar: [],
+                                renderers: [],
+                                command: [],
+                                event: [],
+                            },
+                            external: {
+                                source: plugin.detail.name === themeName ? themePluginUrl : plugin.detail.source, // themePluginUrl
+                                style: rawPlugin.detail.external?.style, // <link>资源
+                                script: rawPlugin.detail.external?.script, // <script>资源
+                            }
+                        };
+                        // load plugin
+                        this._rawHolderAndPlugin.set(rawHolder, rawPlugin);
                     }).catch(error => {
                         // Can't resolve plugin
                         console.error(error)
                     })
                 }
+                if (!isThemePluginInstalled && this._themePlugin) {
+                    // 主题插件还未被安装且存在主题插件
+                    const rawThemePluginHolderUninstalled: PluginHolder = {
+                        key: themeName,
+                        detail: this._themePlugin.detail,
+                        metadata: {
+                            name: '',
+                            version: -1,
+                        },
+                        enable: false,
+                        register: {
+                            toolbar: [],
+                            renderers: [],
+                            command: [],
+                            event: [],
+                        },
+                        external: {
+                            source: themePluginUrl,
+                        }
+                    };
+                    this._rawHolderAndPlugin.set(rawThemePluginHolderUninstalled, this._themePlugin);
+                    LucenceCore.pushNotification({
+                        type: 'info',
+                        message: `当前正在使用的主题(${themeName})包含了未安装的Lucence Editor扩展，是否安装该扩展？`,
+                        source: 'Lucence Editor Extensions (扩展系统)',
+                        reactive: 'install-theme-plugin',
+                        metadata: {
+                            themePlugin: rawThemePluginHolderUninstalled,
+                        },
+                    })
+                }
                 // post constructor
-                this.handlePostConstruct(rawPlugins);
+                this.handlePostConstruct();
             });
     }
     
-    private handlePostConstruct(plugins: AbstractPlugin[]) {
-        for (let plugin of plugins) {
-            this._rawPluginList.push(plugin); // raw plugin push in
-            this.postConstructPlugin(plugin); // construct renderers
+    private handlePostConstruct() {
+        for (let [rawHolder, plugin] of this._rawHolderAndPlugin) {
+            this.postConstructPlugin(rawHolder, plugin); // construct renderers
         }
     }
     
@@ -149,23 +227,20 @@ export class PluginResolver {
         this.core = core;
     }
     
-    // 后置微内核构建
-    private postConstructPlugin(plugin: AbstractPlugin): void {
+    private static readonly FORBID_COMPONENT_NAME: string[] = [
+        'default', 'latex', 'text', 'codeBlock', 'htmlInline', 'customBlock',
+        'frontMatter', 'refDef', 'thematicBreak', 'linebreak', 'softbreak',
+    ]
+    
+    // 后置构造器用来注册渲染器
+    private postConstructPlugin(rawHolder: PluginHolder, plugin: AbstractPlugin): void {
         // 校验detail
         this.checkDetail(plugin);
-        const holder: PluginHolder = {
-            key: plugin.detail.name,
-            detail: plugin.detail,
-            register: {
-                toolbar: [],
-                renderers: [],
-                command: [],
-                event: [],
-            }
-        };
-        // 剥离Renderer
+        // 分离出插件的Renderer单独处理
         const renderers: PluginRenderers | null = plugin.createRenderer();
-        if (renderers !== null) {
+        // 插件有创建的渲染器并且没被禁用
+        if (renderers !== null && rawHolder.enable) {
+            // 注册渲染器和渲染器下的组件
             for (let renderer of renderers) {
                 // renderer.name为PluginRenderer对象的主要名称
                 this._rendererSource[renderer.name] = function (node: MdNode): any {
@@ -177,10 +252,18 @@ export class PluginResolver {
                         return null;
                     }
                     const componentName: string = match[1];
+                    // 阻止不合法的componentName进行渲染
+                    if (rawHolder.key !== 'default_extension') {
+                        for (let forbidName of PluginResolver.FORBID_COMPONENT_NAME) {
+                            if (componentName.toLowerCase() === forbidName) {
+                                return null;
+                            }
+                        }
+                    }
                     if (renderer.components[componentName] === undefined) return null;
                     // 展开来自渲染器组件中的所有formKit的名称
                     const attrs: string[] = renderer.components[componentName].attributes ? renderer.components[componentName].attributes!.map((item: any) => item.name) : [];
-                    // TODO 对attribute逐个调用validate方法进行校验
+                    // 生成上下文
                     const context: RendererContext = PluginResolver.parseRendererFromLiteral(rawContent, attrs);
                     // 调用render方法渲染
                     const fragment: DocumentFragment = renderer.components[componentName].render(context);
@@ -193,8 +276,8 @@ export class PluginResolver {
                     ];
                 }
                 // 注入注册表
-                holder.register.renderers.push({
-                    key: `${plugin.detail.name}.renderer.${renderer.name}`,
+                rawHolder.register.renderers.push({
+                    key: `${rawHolder.key}.renderer.${renderer.name}`,
                     name: `${renderer.name}`,
                     desc: renderer.desc,
                     // 指示这个渲染器下有哪些组件
@@ -202,7 +285,6 @@ export class PluginResolver {
                 });
             }
         }
-        this._rawHolder.set(plugin.detail.name, holder);
     }
 
     private static parseRendererFromLiteral(literal: string, attrs: string[]): RendererContext {
@@ -237,16 +319,26 @@ export class PluginResolver {
         return new RendererContext(attributes, content);
     }
 
+    // 自动挂载
+    public autoload(): void {
+        this.checkCore();
+        for (let [holder, plugin] of this._rawHolderAndPlugin) {
+            // 这时候的resolver必须经过了build
+            this.load(holder, plugin);
+        }
+        // 扫描
+        this.scanAll();
+    }
+
     // 装配Plugin
-    private load(plugin: AbstractPlugin): void {
+    private load(holder: PluginHolder, plugin: AbstractPlugin): void {
         this.checkCore();
         // build plugin
         plugin.build(this.core!);
-        const holder: PluginHolder = this._rawHolder.get(plugin.detail.name)!;
         // 是否已经存在相同name和display的插件，如果是则不load这个插件并throw异常中断程序
         for (let elem of this._pluginList.elems()) {
-            if (elem.key === plugin.detail.name) {
-                throw Error(`Plugin id "${plugin.detail.name}" has been registered before, you should change your plugin id.`);
+            if (elem.key === holder.key) {
+                throw Error(`Plugin id "${holder.key}" has been registered before, you should change your plugin id.`);
             }
         }
         // 插件的事件注册在BasicStructure#PluginEventHolder.register方法中进行实现
@@ -256,12 +348,15 @@ export class PluginResolver {
         if (toolbar) {
             const items: ToolbarItemOptions[] = toolbar.items;
             for (let i: number = 0; i < items.length; i++) {
-                this.core!.editor.insertToolbarItem({
-                    groupIndex: 0,
-                    itemIndex: i,
-                }, items[i]);
+                if (holder.enable) { // 不被禁用
+                    this.core!.editor.insertToolbarItem({
+                        groupIndex: 0,
+                        itemIndex: i,
+                    }, items[i]);
+                }
+                // 注册到扩展坞
                 holder.register.toolbar.push({
-                    key: `${plugin.detail.name}.tool.${items[i].name}`,
+                    key: `${holder.key}.tool.${items[i].name}`,
                     name: `${items[i].name}`,
                     tooltip: `${items[i].tooltip}`,
                 });
@@ -270,20 +365,24 @@ export class PluginResolver {
         // 注册commands
         if (commands) {
             for (let i = 0; i < commands.length; i++) {
-                this.core!.editor.addCommand(
-                    'markdown',
-                    commands[i].name,
-                    commands[i].command,
-                )
+                if (holder.enable) { // 不被禁用
+                    this.core!.editor.addCommand(
+                        'markdown',
+                        commands[i].name,
+                        commands[i].command,
+                    )
+                }
+                // 注册到扩展坞
                 holder.register.command.push({
-                    key: `${plugin.detail.name}.command.${i + 1}`,
+                    key: `${holder.key}.command.${i + 1}`,
                     name: `${commands[i].name}`,
                     returnType: `boolean`,
                 });
             }
         }
         // 将构建完成的插件压栈
-        this._rawHolder.delete(plugin.detail.name);
+        this._rawHolderAndPlugin.delete(holder);
+        // 最终不保留AbstractPlugin而是以Holder的形式挂载
         this._pluginList.push(holder);
         plugin.onEnable();
     }
@@ -292,17 +391,6 @@ export class PluginResolver {
     public disable(plugin: AbstractPlugin): void {
         // 弹栈
         plugin.onDisable();
-    }
-    
-    // 自动挂载
-    public autoload(): void {
-        this.checkCore();
-        for (let plugin of this._rawPluginList) {
-            // 这时候的resolver必须经过了build
-            this.load(plugin);
-        }
-        // 扫描
-        this.scanAll();
     }
     
     // 扫描所有plugin并通过load挂载
@@ -324,10 +412,6 @@ export class PluginResolver {
         // detail.icon校验
         if (!plugin.detail.icon || !matchUrl(plugin.detail.icon)) {
             throw Error("Plugin must provide a correct icon url.");
-        }
-        // detail.name校验
-        if (!plugin.detail.name || !matchName(plugin.detail.name)) {
-            throw Error("Plugin must provide a correct name.");
         }
         // detail.version校验
         if (!plugin.detail.version || !matchVersion(plugin.detail.version)) {
@@ -354,17 +438,12 @@ export class PluginResolver {
     }
     
 }
-
-function matchName(name: string): boolean {
-    const regex: RegExp = /^[a-z_]+$/;
-    return regex.test(name);
-}
-
+// version 格式 n.n.n n为数字
 function matchVersion(version: string): boolean {
     const regex: RegExp = /^\d+\.\d+\.\d+$/;
     return regex.test(version);
 }
-
+// url 格式 https|http://...
 function matchUrl(url: string): boolean {
     // 这是一个简单的URL匹配正则表达式，可能不适用于所有URL，但应该满足基本需求
     const regex: RegExp = 

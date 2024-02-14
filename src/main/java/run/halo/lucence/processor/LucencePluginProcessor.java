@@ -16,7 +16,9 @@ import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.codec.multipart.FilePart;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import run.halo.app.plugin.BasePlugin;
+import run.halo.lucence.entity.Response;
 
 /**
  *
@@ -58,33 +60,39 @@ public class LucencePluginProcessor {
     /**
      * 根据插件名获取插件js文件
      * @param pluginName 插件名
-     * @return 插件文件
+     * @return 插件文件路径
      */
-    public String getPluginJS(String pluginName) {
-        Path pluginPath = Paths.get(this.CONFIG_HOME, pluginName + ".js");
-        return getFileContent(pluginPath);
-    }
-
     public Path getScriptJS(String pluginName) {
         return Paths.get(this.CONFIG_HOME, pluginName + ".js");
     }
 
-    public Mono<String> savePluginJS(FilePart pluginFilePart) {
+    public Mono<Response<Object>> savePluginJS(FilePart pluginFilePart) {
         String fileName = pluginFilePart.filename();
         String absoluteFilePath = this.CONFIG_HOME + File.separator + fileName;
+        File file = new File(absoluteFilePath);
+        if (file.exists()) {
+            return Mono.just(Response.fail("Plugin has existed."));
+        }
         return pluginFilePart
-            .transferTo(new File(absoluteFilePath))
-            .then(Mono.just("Upload plugin success"));
+            .transferTo(file)
+            .then(Mono.just(
+                Response.success("Plugin uploaded successfully.",
+                    null))
+            );
     }
 
-    public void deletePluginJS(String pluginName) {
+    public Mono<Response<Object>> deletePluginJS(String pluginName) {
         Path pluginPath = Paths.get(this.CONFIG_HOME, pluginName + ".js");
-        File fileToDelete = pluginPath.toFile();
-        try {
-            Files.deleteIfExists(pluginPath);
-        } catch (IOException e) {
-            log.error("Error occurred while deleting lucence editor plugin: {}", e.getMessage());
-        }
+        return Mono.fromCallable(() -> {
+            try {
+                // 异步执行文件删除操作
+                Files.deleteIfExists(pluginPath);
+                return Response.success("Delete file successfully.", null);
+            } catch (Exception e) {
+                // 如果删除文件时出现异常，返回异常消息
+                return Response.fail("Error occurred while deleting plugin file " + pluginName + ".js: " + e.getMessage());
+            }
+        }).subscribeOn(Schedulers.boundedElastic());
     }
 
     public static String getFileContent(Path filePath) {
