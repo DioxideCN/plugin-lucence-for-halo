@@ -34,6 +34,15 @@ export class PluginResolver {
     
     // ------ 初始化default的渲染器
     private _rendererSource: Record<string, any> = {
+        htmlBlock: {
+            iframe(node: any) {
+                return [
+                    { type: 'openTag', tagName: 'iframe', outerNewLine: true, attributes: node.attrs },
+                    { type: 'html', content: node.childrenHTML },
+                    { type: 'closeTag', tagName: 'iframe', outerNewLine: true },
+                ];
+            },
+        },
         codeBlock(node: any):any {
             if (node.info === "mermaid") {
                 return [
@@ -47,9 +56,27 @@ export class PluginResolver {
                     { type: 'closeTag', tagName: 'div' },
                 ];
             }
+            if ((node.info as string).includes('diff')) {
+                
+            }
             return [
-                { type: 'openTag', tagName: 'pre', classNames: ['language-' + node.info] },
-                { type: 'openTag', tagName: 'code', classNames: ['hljs', 'language-' + node.info] },
+                { 
+                    type: 'openTag', 
+                    tagName: 'pre', 
+                    classNames: [
+                        'language-' + node.info,
+                        (node.info as string).includes('diff') ? 'diff-highlight' : '',
+                    ] 
+                },
+                { 
+                    type: 'openTag', 
+                    tagName: 'code', 
+                    classNames: [
+                        'hljs', 
+                        'language-' + node.info,
+                        (node.info as string).includes('diff') ? 'diff-highlight' : '',
+                    ] 
+                },
                 { type: 'text', content: node.literal! },
                 { type: 'closeTag', tagName: 'code' },
                 { type: 'closeTag', tagName: 'pre' },
@@ -138,8 +165,7 @@ export class PluginResolver {
                 let themeName = '', themePluginUrl = '';
                 if (themeResponse.data.status.location) {
                     const path = themeResponse.data.status.location as string;
-                    const folders = path.split("\\");
-                    themeName = folders[folders.length - 1];
+                    themeName = getLastFolderName(path);
                     themePluginUrl = `/themes/${themeName}/assets/lucence/${themeName}.js`;
                     await import(themePluginUrl).then(module => {
                         this._themePlugin = new module.default as AbstractPlugin;
@@ -266,12 +292,10 @@ export class PluginResolver {
                     // 生成上下文
                     const context: RendererContext = PluginResolver.parseRendererFromLiteral(rawContent, attrs);
                     // 调用render方法渲染
-                    const fragment: DocumentFragment = renderer.components[componentName].render(context);
-                    const outerDiv: HTMLDivElement = document.createElement('div');
-                    outerDiv.appendChild(fragment);
+                    const outerDivElement: HTMLElement = renderer.components[componentName].render(context);
                     return [
                         { type: 'openTag', tagName: 'div' },
-                        { type: 'html', content: outerDiv.innerHTML, },
+                        { type: 'html', content: outerDivElement.outerHTML, },
                         { type: 'closeTag', tagName: 'div' },
                     ];
                 }
@@ -290,13 +314,14 @@ export class PluginResolver {
     private static parseRendererFromLiteral(literal: string, attrs: string[]): RendererContext {
         const attributes: Record<string, any> = {};
         let content: string = '';
-        if (attrs.length !== 0) {
-            // @ts-ignore
-            const remainingAttrs = Object.fromEntries(attrs.map(attr => [attr, true]));
-            literal.split('\n').map(line => {
-                const [key, value]: string[] = line.split(':').map(part => part.trim());
-                if (key in remainingAttrs) {
-                    delete remainingAttrs[key];
+        const remainingAttrs = new Set(attrs);
+        literal.split('\n').map(line => {
+            for (const attr of remainingAttrs) {
+                if (line.startsWith(attr + ': ')) {
+                    const key = attr;
+                    const value = line.slice(attr.length + 2).trim();
+                    // @ts-ignore
+                    delete remainingAttrs[attr];
                     if (/^\d+$/.test(value)) {
                         attributes[key] = parseInt(value, 10);
                     } else if (value === 'true' || value === 'false') {
@@ -304,18 +329,13 @@ export class PluginResolver {
                     } else {
                         attributes[key] = value;
                     }
-                } else if (key !== 'name') {
-                    content += line;
+                    return;
                 }
-            });
-        } else {
-            literal.split('\n').map(line => {
-                const [key, value]: string[] = line.split(':').map(part => part.trim());
-                if (key !== 'name') {
-                    content += line;
-                }
-            })
-        }
+            }
+            if (!line.startsWith("name: ")) {
+                content += line;
+            }
+        });
         return new RendererContext(attributes, content);
     }
 
@@ -449,6 +469,16 @@ function matchUrl(url: string): boolean {
     const regex: RegExp = 
         /^(https?:\/\/)?([^\s:\/?#]+)(:([0-9]+))?((\/[^\s?#]*)?(\?[^\s#]*)?(#\S*)?)?$/;
     return regex.test(url);
+}
+function getLastFolderName(path: string): string {
+    // 使用正则表达式从路径中提取最后一个文件夹名称
+    const regex = /[\/\\]([^\/\\]+)[\/\\]?$/;
+    const matches = path.match(regex);
+    if (matches && matches.length > 1) {
+        return matches[1];
+    } else {
+        return ''; // 如果没有匹配到文件夹名称，返回null或其他自定义值
+    }
 }
 
 export class RendererContext {

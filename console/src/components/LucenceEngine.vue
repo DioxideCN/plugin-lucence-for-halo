@@ -269,6 +269,30 @@
                             </div>
                             <div class="bar-item--detail">
                                 <template v-if="pluginStore.actionOn === 0">
+                                    <div class="detail-external">
+                                        <div class="detail-external--style">
+                                            <div>Style依赖</div>
+                                            <div>
+                                                <span v-if="!core.plugins.value[pluginStore.activeOn].external.style || core.plugins.value[pluginStore.activeOn].external.style?.length === 0">无</span>
+                                                <span v-else 
+                                                      v-for="(href, idx) in core.plugins.value[pluginStore.activeOn].external.style"
+                                                      :key="idx">
+                                                    {{ href }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div class="detail-external--script">
+                                            <div>Script依赖</div>
+                                            <div>
+                                                <span v-if="!core.plugins.value[pluginStore.activeOn].external.script || core.plugins.value[pluginStore.activeOn].external.script?.length === 0">无</span>
+                                                <span v-else
+                                                      v-for="(src, idx) in core.plugins.value[pluginStore.activeOn].external.script"
+                                                      :key="idx">
+                                                    {{ src }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
                                     {{ core.plugins.value[pluginStore.activeOn].detail.description }}
                                 </template>
                                 <template v-else-if="pluginStore.actionOn === 1">
@@ -470,7 +494,7 @@
                             </template>
                         </div>
                         <div class="section--footer unselectable"
-                             :class="(componentsStore.selectComponentIdx === -1 || componentsStore.selectRenderer!.components[componentsStore.selectComponentName].attributes) ? 'disable' : ''">
+                             :class="(componentsStore.selectComponent) ? '' : 'disable'">
                             <div class="footer--clear" @click="clearInsertInfo()">清空</div>
                             <div class="footer--confirm" @click="insertComponent()">插入</div>
                         </div>

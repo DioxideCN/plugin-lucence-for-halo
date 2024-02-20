@@ -276,7 +276,8 @@ span.stat-panel--key.last { margin-right: -15px; }
 .toastui-editor-md-heading4,
 .toastui-editor-md-heading5,
 .toastui-editor-md-heading6,
-.toastui-editor-defaultUI .toastui-editor .ProseMirror {
+.toastui-editor-defaultUI .toastui-editor .ProseMirror, 
+.insert-renderer--preview .section-body {
     height: 100%;
     font-size: 18px;
     padding: 5px 20px 5px 0;
@@ -1195,6 +1196,16 @@ li.action-item div.action-icon {
 .bar-item--detail::-webkit-scrollbar-track { background-color: var(--editor-editor-left); }
 .bar-item--detail::-webkit-scrollbar-thumb { background: var(--popup-input-border); }
 
+.detail-external--style, .detail-external--script {
+    display: flex;
+    font-size: 15px;
+    color: var(--plugin-font--sub);
+    margin-bottom: 5px;
+}
+.detail-external--style div:first-child, .detail-external--script div:first-child { flex: 1; }
+.detail-external--style div:last-child, .detail-external--script div:last-child { flex: 7; }
+.detail-external--style span, .detail-external--script span { display: block; }
+
 /* Extension action 2 */
 li.ext-list--column { margin-bottom: 10px; }
 .ext-list--title {
@@ -1423,13 +1434,20 @@ table.ext-list--child_list tbody tr td code {
 /* Form Kit Style */
 
 .insert-container--panel .formkit-wrapper.gap-4 { gap: .5rem; }
+legend.formkit-legend,
+span.formkit-label,
 .insert-container--panel label.formkit-label { color: var(--display-p); }
 .insert-container--panel input.formkit-input,
 .insert-container--panel textarea.formkit-input {
     background: transparent;
     color: var(--display-p);
 }
-.insert-container--panel div.formkit-inner {
+.insert-container--panel .formkit-option input[type=radio]:checked {
+    background-color: #007acc;
+    background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3ccircle cx='8' cy='8' r='3'/%3e%3c/svg%3e");
+}
+.insert-container--panel fieldset.formkit-fieldset,
+.insert-container--panel fieldset.formkit-fieldset, .insert-container--panel div.formkit-inner:not(:has(input[type="color"])) {
     border: 1px solid var(--popup-input-border);
 }
 .insert-container--panel .focus-within\:shadow-sm:focus-within {

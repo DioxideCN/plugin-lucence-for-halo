@@ -81,7 +81,7 @@ export class LucenceCore {
 
     /**
      * 构造器内完成对ToastUIEditor的定义
-     * 这包括toolbar、自定义的渲染规则和命令注册
+     * 以及微内核的toolbar、自定义的渲染规则和命令注册
      */
     public async postConstructor(rawContent: string) {
         // 等待 PluginResolver 实例化
@@ -227,7 +227,7 @@ export class LucenceCore {
             subtree: true,
         });
         // 完成构造
-        this.postConstruct();
+        this.finishConstructor();
         // 在构建成功后将instance实例暴露到全局
         return this;
     }
@@ -235,9 +235,29 @@ export class LucenceCore {
     /**
      * 完成构造
      */
-    private postConstruct() {
+    private finishConstructor() {
         LucenceCore._cache.value.plugin.loaded = true;
         LucenceCore._cache.value.components.loaded = true;
+        // 将styles和scripts注入到document.head中
+        for (let pluginHolder of this.resolver.pluginList) {
+            if (pluginHolder.external.style) {
+                for (let href of pluginHolder.external.style) {
+                    const linkElement = document.createElement('link');
+                    linkElement.rel = 'stylesheet';
+                    linkElement.href = href;
+                    linkElement.dataset.key = 'lucence-editor-appender--style';
+                    document.head.appendChild(linkElement);
+                }
+            }
+            if (pluginHolder.external.script) {
+                for (let src of pluginHolder.external.script) {
+                    const scriptElement = document.createElement('script');
+                    scriptElement.src = src;
+                    scriptElement.dataset.key = 'lucence-editor-appender--script';
+                    document.head.appendChild(scriptElement);
+                }
+            }
+        }
     }
 
     /**

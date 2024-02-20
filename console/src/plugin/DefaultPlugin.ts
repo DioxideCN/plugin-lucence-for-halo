@@ -225,9 +225,8 @@ export class DefaultPlugin extends AbstractPlugin {
                         allowContent: true,
                         desc: '插入多行Latex公式',
                         icon: 'fa-solid fa-square-root-variable',
-                        render: function (context: RendererContext) {
-                            const fragment: DocumentFragment = document.createDocumentFragment();
-                            const latexParagraph = document.createElement('p');
+                        render: function (context: RendererContext): HTMLElement {
+                            const latexParagraph: HTMLParagraphElement = document.createElement('p');
                             latexParagraph.classList.add('lucence-block-latex')
                             // 渲染块状latex
                             const raw: string = context.getContent();
@@ -240,8 +239,7 @@ export class DefaultPlugin extends AbstractPlugin {
                                 span.style.fontStyle = 'italic';
                             }
                             latexParagraph.innerHTML = span.outerHTML;
-                            fragment.append(latexParagraph);
-                            return fragment;
+                            return latexParagraph;
                         }
                     }
                 }

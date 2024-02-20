@@ -121,18 +121,9 @@ export type PluginComponent = {
     allowContent?: boolean | undefined;
     allowContentHTML?: boolean | undefined;
     attributes?: Record<string, any> | undefined,
-    render: (context: RendererContext) => DocumentFragment;
+    render: (context: RendererContext) => HTMLElement;
 };
 export type PluginComponents = Record<string, PluginComponent>;
-
-export type FrontPluginHandler = {
-    onUninstalling: boolean,
-    onDisable: boolean,
-    message: {
-        text: string,
-        type: '' | 'info' | 'success' | 'warning' | 'danger'
-    }
-}
 
 export type Notification = {
     closable?: boolean | undefined,
