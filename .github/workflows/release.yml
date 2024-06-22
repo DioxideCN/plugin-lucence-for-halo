@@ -1,0 +1,51 @@
+name: release-action
+
+on:
+    release:
+        types: [created]
+
+jobs:
+    build:
+        uses: ./.github/workflows/build.yml
+    release:
+        needs: build
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout Repo
+              uses: actions/checkout@v3
+
+            - name: Download Artifact
+              uses: actions/download-artifact@v3
+              with:
+                  name: plugin-lucence-for-halo
+                  path: build/libs/
+
+            - name: Get Name of Artifact
+              id: get_artifact
+              run: |
+                  ARTIFACT_PATHNAME=$(ls build/libs/*.jar | head -n 1)
+                  ARTIFACT_NAME=$(basename ${ARTIFACT_PATHNAME})
+                  echo "Artifact pathname: ${ARTIFACT_PATHNAME}"
+                  echo "Artifact name: ${ARTIFACT_NAME}"
+                  echo "ARTIFACT_PATHNAME=${ARTIFACT_PATHNAME}" >> $GITHUB_ENV
+                  echo "ARTIFACT_NAME=${ARTIFACT_NAME}" >> $GITHUB_ENV
+                  echo "RELEASE_ID=${{ github.event.release.id }}" >> $GITHUB_ENV
+
+            - name: Upload a release asset
+              uses: actions/github-script@v2.1.0
+              with:
+                  github-token: ${{secrets.GITHUB_TOKEN}}
+                  script: |
+                      const fs = require('fs').promises;
+                      const { repo: { owner, repo }, sha } = context;
+                      console.log({ owner, repo, sha });
+                      const releaseId = process.env.RELEASE_ID
+                      const artifactPathName = process.env.ARTIFACT_PATHNAME
+                      const artifactName = process.env.ARTIFACT_NAME
+                      console.log('Releasing', releaseId, artifactPathName, artifactName)
+                      await github.repos.uploadReleaseAsset({
+                          owner, repo,
+                          release_id: releaseId,
+                          name: artifactName,
+                          data: await fs.readFile(artifactPathName)
+                      });
