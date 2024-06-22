@@ -48,7 +48,7 @@ export class PluginResolver {
                 return [
                     { type: 'openTag', tagName: 'div', classNames: [node.info, 'mermaid-box', 'show-mermaid'] },
                     { type: 'openTag', tagName: 'div', classNames: [node.info, 'mermaid-to-render'] },
-                    { type: 'text', content: node.literal! },
+                    { type: 'text', content: '' },
                     { type: 'closeTag', tagName: 'div' },
                     { type: 'openTag', tagName: 'div', classNames: [node.info, 'hide-mermaid'] },
                     { type: 'text', content: node.literal! },

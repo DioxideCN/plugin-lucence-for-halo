@@ -812,21 +812,6 @@ pre.hljs,
     border-radius: 5px;
     background: var(--code-amber-block-bg);
 }
-.mermaid.mermaid-box .mermaid-to-render svg #flowchart-pointEnd path,
-.mermaid.mermaid-box .mermaid-to-render svg #arrowhead path,
-.mermaid.mermaid-box .mermaid-to-render svg .edgePaths path,
-.mermaid.mermaid-box .mermaid-to-render svg .cluster rect,
-.mermaid.mermaid-box .mermaid-to-render svg text.messageText {
-    fill: var(--display-p)!important;
-}
-.mermaid.mermaid-box .mermaid-to-render svg #flowchart-pointEnd path,
-.mermaid.mermaid-box .mermaid-to-render svg #arrowhead path,
-.mermaid.mermaid-box .mermaid-to-render svg .messageText,
-.mermaid.mermaid-box .mermaid-to-render svg .loopText,
-.mermaid.mermaid-box .mermaid-to-render svg .loopText > tspan,
-.mermaid.mermaid-box .mermaid-to-render svg line {
-    stroke: var(--display-p)!important;
-}
 
 .toastui-editor-md-list-item-style.toastui-editor-md-list-item-odd {
     color: var(--display-odd)!important;
@@ -1664,7 +1649,7 @@ div#lucence-notification--module .notifications-card {
     -ms-user-select: none;     /* IE/Edge */
 }
 .hide-mermaid { display: none; }
-pre code.hljs { padding: 0!important; }
+pre code.hljs { padding: 0!important; color: var(--display-p); }
 main.content { height: 100vh; }
 .toastui-editor-md-list-item-style.toastui-editor-md-list-item-even {
     color: var(--display-odd)!important;

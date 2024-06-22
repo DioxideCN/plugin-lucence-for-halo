@@ -733,6 +733,9 @@ export class LucenceCore {
      * @param theme 主题色，一般通过{@link #getTheme()}方法来获取
      */
     private updateToolbarItem(theme: string): void {
+        // 切换mermaid主题
+        mermaid.initialize({ theme: theme === 'light' ? 'default' : 'dark' });
+        LucenceCore.renderMermaid();
         this.instance!.removeToolbarItem(`tool-theme-${theme === 'light' ? 'moon' : 'day'}`);
         this.instance!.insertToolbarItem({ groupIndex: 0, itemIndex: 0 }, {
             name: `tool-theme-${theme === 'light' ? 'day' : 'moon'}`,
@@ -820,7 +823,9 @@ export class LucenceCore {
         // 静态初始化mermaid语法
         mermaid.initialize({ 
             startOnLoad: true,
-        });
+            theme: LucenceCore.getTheme() === 'light' ? 'default' : 'dark',
+    });
+        window.mermaid = mermaid
         // 静态初始化highlight.js
         hljs.configure({
             ignoreUnescapedHTML: true,
@@ -1136,12 +1141,24 @@ export class LucenceCore {
      * 为所有class为".mermaid.mermaid-box"的容器渲染mermaid语法
      */
     private static renderMermaid(): void {
-        mermaid.init(
-            undefined,
-            document.querySelectorAll('.mermaid-to-render'))
-            .catch(e => {
-                console.error(e);
-            });
+        const hideMermaidContainers = document.querySelectorAll('.mermaid-box.show-mermaid');
+        hideMermaidContainers.forEach((container, index) => {
+            const graphDefinition = container.lastChild.textContent.trim();
+            if (graphDefinition) {
+                try {
+                    mermaid.render(`mermaidGraph${index}`, graphDefinition, (svgCode) => {
+                        const renderContainer = container.querySelector('.mermaid-to-render');
+                        if (renderContainer) {
+                            renderContainer.innerHTML = svgCode;
+                        } else {
+                            console.error("No .mermaid-to-render element found in container");
+                        }
+                    });
+                } catch (e) {
+                    console.error(e);
+                }
+            }
+        });
     }
 
     private static uniqueId(): string {
