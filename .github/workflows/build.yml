@@ -1,21 +1,14 @@
 name: build-action
 
 on:
-    pull_request:
-        branches:
-            - main
-        paths:
-            - "**"
-            - "!**.md"
     push:
         branches:
-            - main
-        paths:
-            - "**"
-            - "!**.md"
-    release:
-        types:
-            - created
+            - master
+            - dev
+    pull_request:
+        branches:
+            - master
+            - dev
     workflow_call:
 
 jobs:
