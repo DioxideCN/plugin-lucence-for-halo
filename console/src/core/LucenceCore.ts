@@ -78,6 +78,9 @@ export class LucenceCore {
     // 搜索节流器
     private searchThrottleTimer: number | undefined;
 
+    // mermaid缓存容器
+    private static previousGraphDefinitions: Map<Element, string> = new Map();
+
     /**
      * 构造器内完成对ToastUIEditor的定义
      * 以及微内核的toolbar、自定义的渲染规则和命令注册
@@ -734,6 +737,7 @@ export class LucenceCore {
     private updateToolbarItem(theme: string): void {
         // 切换mermaid主题
         mermaid.initialize({ theme: theme === 'light' ? 'default' : 'dark' });
+        this.previousGraphDefinitions.clear(); // 清空缓存为下一次渲染换色
         LucenceCore.renderMermaid();
         this.instance!.removeToolbarItem(`tool-theme-${theme === 'light' ? 'moon' : 'day'}`);
         this.instance!.insertToolbarItem({ groupIndex: 0, itemIndex: 0 }, {
@@ -1139,8 +1143,6 @@ export class LucenceCore {
     /**
      * 为所有class为".mermaid.mermaid-box"的容器渲染mermaid语法
      */
-    private static previousGraphDefinitions: Map<Element, string> = new Map();
-
     public static renderMermaid(): void {
         const hideMermaidContainers = document.querySelectorAll('.mermaid-box.show-mermaid');
         hideMermaidContainers.forEach((container, index) => {
