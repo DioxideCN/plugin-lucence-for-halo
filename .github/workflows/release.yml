@@ -25,10 +25,8 @@ jobs:
               run: |
                   ARTIFACT_PATHNAME=$(ls build/libs/*.jar | head -n 1)
                   ARTIFACT_NAME=$(basename ${ARTIFACT_PATHNAME})
-                  echo "Artifact pathname: ${ARTIFACT_PATHNAME}"
-                  echo "Artifact name: ${ARTIFACT_NAME}"
-                  echo "ARTIFACT_PATHNAME=${ARTIFACT_PATHNAME}" >> $GITHUB_ENV
-                  echo "ARTIFACT_NAME=${ARTIFACT_NAME}" >> $GITHUB_ENV
+                  echo "ARTIFACT_PATHNAME=$ARTIFACT_PATHNAME" >> $GITHUB_ENV
+                  echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> $GITHUB_ENV
                   echo "RELEASE_ID=${{ github.event.release.id }}" >> $GITHUB_ENV
 
             - name: Upload a release asset
@@ -44,8 +42,8 @@ jobs:
                       const artifactName = process.env.ARTIFACT_NAME
                       console.log('Releasing', releaseId, artifactPathName, artifactName)
                       await github.repos.uploadReleaseAsset({
-                          owner, repo,
-                          release_id: releaseId,
-                          name: artifactName,
-                          data: await fs.readFile(artifactPathName)
+                        owner, repo,
+                        release_id: releaseId,
+                        name: artifactName,
+                        data: await fs.readFile(artifactPathName)
                       });
