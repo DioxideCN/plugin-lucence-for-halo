@@ -10,7 +10,6 @@ import type {AreaType, CacheType} from "@/core/TypeDefinition";
 import type {SelectionPos} from "@toast-ui/editor/types/editor";
 import type {EventHandler, Notification, PluginComponent, PluginEvent, PluginHolder} from "@/extension/ArgumentPlugin";
 import {PluginEventHolder} from "@/core/BasicStructure";
-import type {AbstractPlugin} from "@/extension/AbstractPlugin";
 import {PluginResolver, RendererContext} from "@/core/PluginResolver";
 import {LineWalker} from "@/kernel/LineWalker";
 import type {LucencePlugin, LucencePluginList} from "@/extension/ExtentedPluginType";
@@ -210,7 +209,7 @@ export class LucenceCore {
                 },
             });
         // 文本内容观察者
-        const observer = new MutationObserver((mutationsList: MutationRecord[], observer: MutationObserver): void => {
+        const observer = new MutationObserver((mutationsList: MutationRecord[]): void => {
             for (let mutation of mutationsList) {
                 if (mutation.type === 'childList' || mutation.type === 'characterData') {
                     // 调用内容变化的所有事件栈
@@ -1140,16 +1139,21 @@ export class LucenceCore {
     /**
      * 为所有class为".mermaid.mermaid-box"的容器渲染mermaid语法
      */
-    private static renderMermaid(): void {
+    private static previousGraphDefinitions: Map<Element, string> = new Map();
+
+    public static renderMermaid(): void {
         const hideMermaidContainers = document.querySelectorAll('.mermaid-box.show-mermaid');
         hideMermaidContainers.forEach((container, index) => {
             const graphDefinition = container.lastChild.textContent.trim();
-            if (graphDefinition) {
+            const previousGraphDefinition = this.previousGraphDefinitions.get(container);
+
+            if (graphDefinition && graphDefinition !== previousGraphDefinition) {
                 try {
-                    mermaid.render(`mermaidGraph${index}`, graphDefinition, (svgCode) => {
+                    mermaid.render(`mermaidGraph_${index}`, graphDefinition, (svgCode) => {
                         const renderContainer = container.querySelector('.mermaid-to-render');
                         if (renderContainer) {
                             renderContainer.innerHTML = svgCode;
+                            this.previousGraphDefinitions.set(container, graphDefinition);
                         } else {
                             console.error("No .mermaid-to-render element found in container");
                         }
