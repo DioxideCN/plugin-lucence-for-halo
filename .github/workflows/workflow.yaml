@@ -62,10 +62,10 @@ jobs:
           version=${version#v}
           sed -i "s/version=.*-SNAPSHOT$/version=$version/1" gradle.properties
           ./gradlew clean build -x test
-      - name: Archive plugin-text-diagram jar
+      - name: Archive plugin-lucence-for-halo jar
         uses: actions/upload-artifact@v2
         with:
-          name: plugin-text-diagram
+          name: plugin-lucence-for-halo
           path: |
             build/libs/*.jar
           retention-days: 1
@@ -75,10 +75,10 @@ jobs:
     needs: build
     if: github.event_name == 'release'
     steps:
-      - name: Download plugin-text-diagram jar
+      - name: Download plugin-lucence-for-halo jar
         uses: actions/download-artifact@v2
         with:
-          name: plugin-text-diagram
+          name: plugin-lucence-for-halo
           path: build/libs
       - name: Get Name of Artifact
         id: get_artifact
@@ -94,7 +94,7 @@ jobs:
         uses: actions/github-script@v2
         if: github.event_name == 'release'
         with:
-          github-token: ${{secrets.GITHUB_TOKEN}}
+          github-token: ${{secrets.REPO_ACTION_TOKEN}}
           script: |
             console.log('environment', process.versions);
 
