@@ -51,9 +51,10 @@ jobs:
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/console/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
       - name: Install Frontend Dependencies
-        run: |
-          ./gradlew pnpmInstall
+        run: ./gradlew pnpmInstall
       - name: Build with Gradle
         run: |
           # Set the version with tag name when releasing
