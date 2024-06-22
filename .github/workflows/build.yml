@@ -16,6 +16,7 @@ on:
     release:
         types:
             - created
+    workflow_call:
 
 jobs:
     build:
