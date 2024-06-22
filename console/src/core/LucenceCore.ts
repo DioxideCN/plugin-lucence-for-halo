@@ -577,11 +577,26 @@ export class LucenceCore {
                 let clone: Element = node.cloneNode(true) as Element;
                 // 检查并处理mermaid类型
                 if (clone.classList.contains('show-mermaid')) {
-                    let mermaidElement: Element = 
-                        clone.querySelectorAll('.hide-mermaid')[0];
-                    mermaidElement.classList.remove('hide-mermaid');
-                    mermaidElement.classList.add('mermaid-box');
-                    newHtml += mermaidElement.outerHTML;
+                    let mermaidElement: Element = clone.querySelectorAll('.hide-mermaid')[0];
+                    const mermaidSyntax: string = mermaidElement.textContent || "";
+                    /*
+                     * <div class="mermaid-box">
+                     *     <div class="mermaid-output"></div>
+                     *     <div class="mermaid-syntax" style="display: none;">${mermaidSyntax}</div>                        
+                     * </div>
+                     */
+                    const mermaidBox: HTMLDivElement = document.createElement('div');
+                    mermaidBox.classList.add('mermaid-box');
+                    const mermaidOutput: HTMLDivElement = document.createElement('div');
+                    mermaidOutput.classList.add('mermaid-output');
+                    const mermaidSyntaxDiv: HTMLDivElement = document.createElement('div');
+                    mermaidSyntaxDiv.classList.add('mermaid-syntax');
+                    mermaidSyntaxDiv.style.display = 'none';
+                    mermaidSyntaxDiv.textContent = mermaidSyntax;
+                    mermaidBox.appendChild(mermaidOutput);
+                    mermaidBox.appendChild(mermaidSyntaxDiv);
+                    // 将 mermaidBox 转换为字符串并添加到 newHtml 中
+                    newHtml += mermaidBox.outerHTML;
                     continue;
                 }
                 clone.removeAttribute('data-nodeid');
@@ -737,7 +752,7 @@ export class LucenceCore {
     private updateToolbarItem(theme: string): void {
         // 切换mermaid主题
         mermaid.initialize({ theme: theme === 'light' ? 'default' : 'dark' });
-        this.previousGraphDefinitions.clear(); // 清空缓存为下一次渲染换色
+        LucenceCore.previousGraphDefinitions.clear(); // 清空缓存为下一次渲染换色
         LucenceCore.renderMermaid();
         this.instance!.removeToolbarItem(`tool-theme-${theme === 'light' ? 'moon' : 'day'}`);
         this.instance!.insertToolbarItem({ groupIndex: 0, itemIndex: 0 }, {
@@ -825,10 +840,9 @@ export class LucenceCore {
     static {
         // 静态初始化mermaid语法
         mermaid.initialize({ 
-            startOnLoad: true,
-            theme: LucenceCore.getTheme() === 'light' ? 'default' : 'dark',
-    });
-        window.mermaid = mermaid
+                startOnLoad: true,
+                theme: LucenceCore.getTheme() === 'light' ? 'default' : 'dark',
+        });
         // 静态初始化highlight.js
         hljs.configure({
             ignoreUnescapedHTML: true,
@@ -1146,13 +1160,14 @@ export class LucenceCore {
     public static renderMermaid(): void {
         const hideMermaidContainers = document.querySelectorAll('.mermaid-box.show-mermaid');
         hideMermaidContainers.forEach((container, index) => {
-            const graphDefinition = container.lastChild.textContent.trim();
-            const previousGraphDefinition = this.previousGraphDefinitions.get(container);
+            if (!container.lastChild || !container.lastChild.textContent) return;
+            const graphDefinition: string = container.lastChild.textContent.trim();
+            const previousGraphDefinition: string | undefined = LucenceCore.previousGraphDefinitions.get(container);
 
             if (graphDefinition && graphDefinition !== previousGraphDefinition) {
                 try {
                     mermaid.render(`mermaidGraph_${index}`, graphDefinition, (svgCode) => {
-                        const renderContainer = container.querySelector('.mermaid-to-render');
+                        const renderContainer: Element | null = container.querySelector('.mermaid-to-render');
                         if (renderContainer) {
                             renderContainer.innerHTML = svgCode;
                             this.previousGraphDefinitions.set(container, graphDefinition);

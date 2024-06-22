@@ -11,17 +11,7 @@ public class MermaidInjector {
         // language=html
         return """
             <script defer src="/plugins/plugin-lucence-for-halo/assets/static/mermaid/mermaid.min.js"></script>
-            <script id='lucence-mermaid__renderer'>
-                document.addEventListener("DOMContentLoaded", function() {
-                    mermaid.initialize({
-                        startOnLoad: true,
-                        theme: 'default',
-                    });
-                    mermaid.init(undefined, document.querySelectorAll('.mermaid.mermaid-box')).catch(e => {
-                        console.error(e);
-                    });
-                });
-            </script>
+            <script id='lucence-mermaid__renderer' defer src="/plugins/plugin-lucence-for-halo/assets/static/lucence/kernel_exposer.js"></script>
             """;
     }
 
