@@ -10,8 +10,8 @@ public class MermaidInjector {
     public static String get() {
         // language=html
         return """
-            <script defer src="/plugins/plugin-lucence-for-halo/assets/static/mermaid/mermaid.min.js"></script>
-            <script id='lucence-mermaid__renderer' defer src="/plugins/plugin-lucence-for-halo/assets/static/lucence/kernel_exposer.js"></script>
+            <script src="/plugins/plugin-lucence-for-halo/assets/static/mermaid/mermaid.min.js"></script>
+            <script id='lucence-mermaid__renderer' src="/plugins/plugin-lucence-for-halo/assets/static/lucence/api.js"></script>
             """;
     }
 
